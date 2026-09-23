@@ -1,0 +1,22 @@
+{
+  "os":  "Windows-10-10.0.19045-SP0",
+  "python":  "CPython 3.14.5",
+  "startedAt":  "2026-09-19T02:24:41.838713Z",
+  "program":  "-m ml.train",
+  "email":  "arauujojulia@outlook.com",
+  "root":  "C:\\Users\\silva\\PycharmProjects\\PythonProject",
+  "host":  "DESKTOP-2VNMGFT",
+  "executable":  "C:\\Users\\silva\\PycharmProjects\\PythonProject\\.venv\\Scripts\\python.exe",
+  "cpu_count":  2,
+  "cpu_count_logical":  4,
+  "disk":  {
+    "/":  {
+      "total":  "127328075776",
+      "used":  "60686381056"
+    }
+  },
+  "memory":  {
+    "total":  "8466989056"
+  },
+  "writerId":  "t9sz86hevdkcsnejvgm8x4smq7ew4ta6"
+}
