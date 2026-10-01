@@ -106,6 +106,7 @@ data/
 ml/
   __init__.py
   data.py                # carregamento e preparação do WDBC
+<<<<<<< HEAD
   train.py               # treino e avaliação dos modelos (US04)
   predict.py              # classificação de um novo caso (US02, US03)
   artifacts/               # gerado pelo treino: modelos .joblib + metrics.json
@@ -116,10 +117,18 @@ api/
 
 Não vão para o repositório (ver `.gitignore`): `.venv/`, `.idea/`,
 `__pycache__/` e `.env`.
+=======
+  train.py               # treino, avaliação e log dos modelos no W&B
+```
+
+Não vão para o repositório (ver `.gitignore`): `.venv/`, `.idea/`,
+`__pycache__/`, `wandb/` (logs gerados a cada treino) e `.env`.
+>>>>>>> 6c6a6c6d389464f7a7fca2e9d9e017954b8fe7f9
 
 ### `ml/data.py`
 
 Lê o `wdbc.data` (CSV sem cabeçalho: ID, diagnóstico M/B, 30
+<<<<<<< HEAD
 características) e retorna `X`, `y` e os nomes das features
 (`FEATURE_COLUMNS`). O rótulo é invertido em relação ao arquivo original
 para que `y = 1` signifique **maligno** — isso simplifica o cálculo de
@@ -152,6 +161,26 @@ avaliações), prevista para a Sprint 2.
 
 Cria a aplicação Flask, conecta ao PostgreSQL via
 `SQLALCHEMY_DATABASE_URI` e registra o blueprint de `api/routes.py`.
+=======
+características) e retorna `X`, `y` e os nomes das features. O rótulo é
+invertido em relação ao arquivo original para que `y = 1` signifique
+**maligno** — isso simplifica o cálculo de sensibilidade e da taxa de
+falsos negativos, tratando maligno como classe positiva.
+
+### `ml/train.py`
+
+Faz o split treino/teste (80/20, estratificado, `random_state` fixo para
+reprodutibilidade), padroniza as features com `StandardScaler`, treina
+regressão logística e SVM, e calcula acurácia, sensibilidade,
+especificidade, AUC e taxa de falsos negativos para cada um. Cada modelo
+é logado como um run separado no **Weights & Biases**, no mesmo projeto e
+grupo, para comparação lado a lado no painel.
+
+### `app.py`
+
+Cria a aplicação Flask e conecta ao PostgreSQL via
+`SQLALCHEMY_DATABASE_URI`.
+>>>>>>> 6c6a6c6d389464f7a7fca2e9d9e017954b8fe7f9
 
 ---
 
@@ -166,6 +195,7 @@ Cria a aplicação Flask, conecta ao PostgreSQL via
    `tcc_cancer_mama`), e configurar a string de conexão em `app.py`
    (`SQLALCHEMY_DATABASE_URI`).
 
+<<<<<<< HEAD
 3. Treinar e comparar os classificadores:
    ```
    python -m ml.train
@@ -173,10 +203,25 @@ Cria a aplicação Flask, conecta ao PostgreSQL via
    Isso gera `ml/artifacts/` com os modelos e as métricas.
 
 4. Subir a API:
+=======
+3. Fazer login no Weights & Biases uma vez (fica salvo na máquina):
+   ```
+   wandb login
+   ```
+
+4. Treinar e comparar os classificadores:
+   ```
+   python -m ml.train
+   ```
+   O link do painel com as métricas de cada modelo aparece no terminal.
+
+5. Subir a API:
+>>>>>>> 6c6a6c6d389464f7a7fca2e9d9e017954b8fe7f9
    ```
    python app.py
    ```
 
+<<<<<<< HEAD
 5. Testar a classificação (exemplo com curl, usando as 30 características
    nos nomes de `ml/data.py FEATURE_COLUMNS`):
    ```
@@ -206,6 +251,15 @@ Cria a aplicação Flask, conecta ao PostgreSQL via
 - [ ] Persistência de `Avaliacao` e `ModeloTreinado` no PostgreSQL (US07)
 - [ ] Endpoint `GET /api/metricas`
 - [ ] Feature importance do modelo de melhor desempenho (US06)
+=======
+---
+
+## O que ainda falta implementar
+
+- [ ] Endpoints `POST /api/biopsias/classificar` e `GET /api/metricas`
+- [ ] Persistência de `Avaliacao` e `ModeloTreinado` no PostgreSQL
+- [ ] Feature importance do modelo de melhor desempenho
+>>>>>>> 6c6a6c6d389464f7a7fca2e9d9e017954b8fe7f9
 - [ ] Criptografia de dados identificados (LGPD), caso o formulário passe
       a aceitar identificação opcional
 - [ ] Medição e garantia do tempo de resposta (< 2s) do endpoint de
