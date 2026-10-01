@@ -1,0 +1,16 @@
+{
+  "regressao_logistica": {
+    "acuracia": 0.9649122807017544,
+    "sensibilidade": 0.9285714285714286,
+    "especificidade": 0.9861111111111112,
+    "auc": 0.996031746031746,
+    "taxa_falsos_negativos": 0.07142857142857142
+  },
+  "svm": {
+    "acuracia": 0.9736842105263158,
+    "sensibilidade": 0.9285714285714286,
+    "especificidade": 1.0,
+    "auc": 0.9947089947089947,
+    "taxa_falsos_negativos": 0.07142857142857142
+  }
+}
