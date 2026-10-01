@@ -1,6 +1,5 @@
 import os
 
-import wandb
 import pandas as pd
 
 # Caminho do arquivo de dados. Ajuste se você mover o wdbc.data para

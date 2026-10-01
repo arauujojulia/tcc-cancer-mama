@@ -1,25 +1,19 @@
-"""
-Treinamento e avaliação dos classificadores, com cada modelo logado
-como um run separado no Weights & Biases (mesmo projeto/grupo), pra
-comparar os dois lado a lado no painel.
+# Rode com python -m ml.train
+import json
+import os
 
-Antes de rodar, faça login uma vez no terminal (não precisa repetir
-depois, fica salvo na máquina):
-    wandb login
-"""
-
+import joblib
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
-import wandb
 from ml.data import load_data
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
-WANDB_PROJECT = "tcc-cancer-mama"
+ARTIFACTS_DIR = os.path.join(os.path.dirname(__file__), "artifacts")
 
 MODELS = {
     "regressao_logistica": LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),
@@ -45,7 +39,9 @@ def compute_metrics(y_true, y_pred, y_proba):
     }
 
 
-def train_and_evaluate():
+def train_and_evaluate(output_dir=ARTIFACTS_DIR):
+    os.makedirs(output_dir, exist_ok=True)
+
     X, y, feature_names = load_data()
 
     # stratify=y garante que a proporção de malignos/benignos seja a
@@ -60,31 +56,30 @@ def train_and_evaluate():
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
+    joblib.dump(scaler, os.path.join(output_dir, "scaler.joblib"))
 
     resultados = {}
     for nome, modelo in MODELS.items():
-        run = wandb.init(
-            project=WANDB_PROJECT,
-            name=nome,
-            group="comparacao-classificadores",
-            config={
-                "modelo": nome,
-                "test_size": TEST_SIZE,
-                "random_state": RANDOM_STATE,
-                **modelo.get_params(),
-            },
-            reinit=True,
-        )
-
         modelo.fit(X_train_scaled, y_train)
         y_pred = modelo.predict(X_test_scaled)
         y_proba = modelo.predict_proba(X_test_scaled)[:, 1]
 
-        metrics = compute_metrics(y_test, y_pred, y_proba)
-        wandb.log(metrics)
-        resultados[nome] = metrics
+        resultados[nome] = compute_metrics(y_test, y_pred, y_proba)
+        joblib.dump(modelo, os.path.join(output_dir, f"{nome}.joblib"))
 
-        run.finish()
+    with open(os.path.join(output_dir, "metrics.json"), "w") as f:
+        json.dump(resultados, f, indent=2)
+
+    # RNF03: split e hiperparâmetros documentados e versionados.
+    config = {
+        "test_size": TEST_SIZE,
+        "random_state": RANDOM_STATE,
+        "n_features": len(feature_names),
+        "feature_names": feature_names,
+        "hiperparametros": {nome: modelo.get_params() for nome, modelo in MODELS.items()},
+    }
+    with open(os.path.join(output_dir, "train_config.json"), "w") as f:
+        json.dump(config, f, indent=2, default=str)
 
     return resultados
 
