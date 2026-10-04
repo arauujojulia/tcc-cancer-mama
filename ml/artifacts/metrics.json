@@ -1,5 +1,5 @@
 {
-  "gerado_em": "2026-10-04T15:34:07.690717+00:00",
+  "gerado_em": "2026-10-04T16:09:37.641611+00:00",
   "classe_positiva": "maligno",
   "meta_sensibilidade": 0.97,
   "melhor_modelo": "regressao_logistica",

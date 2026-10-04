@@ -81,16 +81,16 @@
     }
   },
   "hashes_sha256": {
-    "scaler": "675694824379e69e77f1ef2c4cbc7733ae3dfd856dca73416b6d373bc65c1873",
-    "regressao_logistica": "4610bb0a98d96bf937ee06a8f97d20432f7fb698204381ac2b3b2da51f5ee33d",
-    "svm": "fc064ceb07f94bfcf9e501d4fb3f7ee93e25ac913baf53cb3bdd5c040161dcda",
+    "scaler": "d2424258e192318c836645d1aec012cedc9da934124537181ca3ebd3e2c23838",
+    "regressao_logistica": "acc2cbc5fd81d2c69a359797ce4188fb38dad29a8bdfa024114d86591d17f5b1",
+    "svm": "0ea4aeaf541c4d91a60dd9da60095e25da22647bbb53d1a738dee09ed26ad7ea",
     "dataset": "d606af411f3e5be8a317a5a8b652b425aaf0ff38ca683d5327ffff94c3695f4a"
   },
   "versoes": {
-    "python": "3.13.16",
+    "python": "3.14.5",
     "scikit_learn": "1.9.1",
     "numpy": "2.5.3",
     "joblib": "1.6.0"
   },
-  "commit_git": "909b23623df7c5096e5360bcece6c5e8c7259cd6"
+  "commit_git": "fe3051a753c365073b6b773b2b61dd3535306481"
 }

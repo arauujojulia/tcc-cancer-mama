@@ -6,305 +6,305 @@
     "regressao_logistica": [
       {
         "caracteristica": "worst_texture",
-        "importancia": 0.07191168052976499,
-        "desvio": 0.024778302359440924
+        "importancia": 0.071911680529765,
+        "desvio": 0.02477830235944085
       },
       {
         "caracteristica": "worst_symmetry",
-        "importancia": 0.06705025302422904,
-        "desvio": 0.013636548972271104
+        "importancia": 0.06705025302422923,
+        "desvio": 0.013636548972271146
       },
       {
         "caracteristica": "worst_concavity",
-        "importancia": 0.0565948555029546,
-        "desvio": 0.010098526962940413
+        "importancia": 0.05659485550295443,
+        "desvio": 0.010098526962940363
       },
       {
         "caracteristica": "worst_concave_points",
-        "importancia": 0.030468059158590712,
-        "desvio": 0.008348018168079289
+        "importancia": 0.03046805915859091,
+        "desvio": 0.008348018168079325
       },
       {
         "caracteristica": "mean_concave_points",
         "importancia": 0.028600181278455605,
-        "desvio": 0.012568507835791144
+        "desvio": 0.01256850783579112
       },
       {
         "caracteristica": "mean_concavity",
-        "importancia": 0.027984101752981053,
-        "desvio": 0.00891071620567186
+        "importancia": 0.027984101752980953,
+        "desvio": 0.00891071620567181
       },
       {
         "caracteristica": "worst_radius",
-        "importancia": 0.01814972062863705,
-        "desvio": 0.012718360531997342
+        "importancia": 0.018149720628637053,
+        "desvio": 0.012718360531997357
       },
       {
         "caracteristica": "worst_smoothness",
-        "importancia": 0.014073343046873814,
-        "desvio": 0.0050053463741112384
+        "importancia": 0.014073343046873521,
+        "desvio": 0.005005346374111148
       },
       {
         "caracteristica": "worst_area",
-        "importancia": 0.013946626852415045,
-        "desvio": 0.011410580700690351
+        "importancia": 0.013946626852414941,
+        "desvio": 0.011410580700690317
       },
       {
         "caracteristica": "worst_perimeter",
-        "importancia": 0.013792212750145664,
-        "desvio": 0.010035394578041538
+        "importancia": 0.013792212750145635,
+        "desvio": 0.010035394578041543
       },
       {
         "caracteristica": "se_radius",
-        "importancia": 0.011990233465277314,
-        "desvio": 0.01311553485051896
+        "importancia": 0.011990233465277281,
+        "desvio": 0.013115534850518949
       },
       {
         "caracteristica": "se_texture",
-        "importancia": 0.01045157161494076,
-        "desvio": 0.005686082603221857
+        "importancia": 0.010451571614940666,
+        "desvio": 0.0056860826032218885
       },
       {
         "caracteristica": "se_concave_points",
-        "importancia": 0.007875310103066448,
-        "desvio": 0.006131872397036307
+        "importancia": 0.007875310103066451,
+        "desvio": 0.006131872397036315
       },
       {
         "caracteristica": "mean_smoothness",
-        "importancia": 0.007100129810168428,
-        "desvio": 0.004981227371294813
+        "importancia": 0.007100129810168404,
+        "desvio": 0.004981227371294807
       },
       {
         "caracteristica": "mean_perimeter",
-        "importancia": 0.004422413981407752,
-        "desvio": 0.004838368694252708
+        "importancia": 0.004422413981407767,
+        "desvio": 0.004838368694252743
       },
       {
         "caracteristica": "se_area",
-        "importancia": 0.004195233284892322,
-        "desvio": 0.007861523502621919
+        "importancia": 0.004195233284892266,
+        "desvio": 0.007861523502621892
       },
       {
         "caracteristica": "mean_radius",
-        "importancia": 0.004194005861029503,
-        "desvio": 0.004973005505452737
+        "importancia": 0.0041940058610295166,
+        "desvio": 0.004973005505452781
       },
       {
         "caracteristica": "mean_area",
-        "importancia": 0.004084766305457955,
-        "desvio": 0.005600440061954911
+        "importancia": 0.004084766305457934,
+        "desvio": 0.00560044006195492
       },
       {
         "caracteristica": "se_perimeter",
-        "importancia": 0.003104571916499354,
-        "desvio": 0.007688015296691694
+        "importancia": 0.0031045719164993295,
+        "desvio": 0.007688015296691688
       },
       {
         "caracteristica": "worst_fractal_dimension",
-        "importancia": 0.002644264742178945,
-        "desvio": 0.0005316467459314024
+        "importancia": 0.0026442647421792954,
+        "desvio": 0.000531646745931474
       },
       {
         "caracteristica": "se_smoothness",
-        "importancia": 0.0012027780474129811,
-        "desvio": 0.0034032800604216506
+        "importancia": 0.0012027780474129978,
+        "desvio": 0.0034032800604216775
       },
       {
         "caracteristica": "se_symmetry",
-        "importancia": 0.0006292780261266242,
-        "desvio": 0.004143706691895572
+        "importancia": 0.0006292780261265489,
+        "desvio": 0.004143706691895571
       },
       {
         "caracteristica": "mean_texture",
-        "importancia": 0.0004677834699811002,
-        "desvio": 0.006576391410492051
+        "importancia": 0.0004677834699812198,
+        "desvio": 0.0065763914104920215
       },
       {
         "caracteristica": "mean_fractal_dimension",
-        "importancia": -0.0011563815061153583,
-        "desvio": 0.0008733610400853607
+        "importancia": -0.0011563815061153674,
+        "desvio": 0.0008733610400853504
       },
       {
         "caracteristica": "se_compactness",
-        "importancia": -0.001252102112685997,
-        "desvio": 0.011506826097045371
+        "importancia": -0.001252102112686077,
+        "desvio": 0.011506826097045428
       },
       {
         "caracteristica": "se_concavity",
-        "importancia": -0.001874764925236449,
-        "desvio": 0.0007293113119190073
+        "importancia": -0.0018747649252364676,
+        "desvio": 0.0007293113119190033
       },
       {
         "caracteristica": "mean_symmetry",
-        "importancia": -0.0028695491522910395,
-        "desvio": 0.002179799561641072
+        "importancia": -0.002869549152291093,
+        "desvio": 0.0021797995616410987
       },
       {
         "caracteristica": "se_fractal_dimension",
-        "importancia": -0.003400400722935774,
-        "desvio": 0.007567559559466344
+        "importancia": -0.003400400722935828,
+        "desvio": 0.007567559559466383
       },
       {
         "caracteristica": "worst_compactness",
-        "importancia": -0.006900665787799669,
-        "desvio": 0.0017137051661469346
+        "importancia": -0.0069006657877998204,
+        "desvio": 0.0017137051661469654
       },
       {
         "caracteristica": "mean_compactness",
-        "importancia": -0.007170297960263574,
-        "desvio": 0.004349953103798662
+        "importancia": -0.007170297960263607,
+        "desvio": 0.00434995310379865
       }
     ],
     "svm": [
       {
         "caracteristica": "worst_texture",
-        "importancia": 0.04635716016348755,
-        "desvio": 0.018842916858934387
+        "importancia": 0.0463571601634876,
+        "desvio": 0.018842916858934355
       },
       {
         "caracteristica": "worst_radius",
-        "importancia": 0.022038544752391757,
-        "desvio": 0.013672621143282302
+        "importancia": 0.022038544752391826,
+        "desvio": 0.01367262114328232
       },
       {
         "caracteristica": "worst_concave_points",
-        "importancia": 0.021313944450194924,
-        "desvio": 0.00909609764294047
+        "importancia": 0.021313944450194997,
+        "desvio": 0.009096097642940459
       },
       {
         "caracteristica": "worst_concavity",
-        "importancia": 0.018918143525718432,
-        "desvio": 0.009390544395601405
+        "importancia": 0.018918143525718484,
+        "desvio": 0.009390544395601374
       },
       {
         "caracteristica": "worst_smoothness",
-        "importancia": 0.01869461257879695,
-        "desvio": 0.010809153844264894
+        "importancia": 0.01869461257879706,
+        "desvio": 0.010809153844264886
       },
       {
         "caracteristica": "worst_perimeter",
-        "importancia": 0.018236202270003696,
-        "desvio": 0.01210095620658323
+        "importancia": 0.018236202270003745,
+        "desvio": 0.012100956206583198
       },
       {
         "caracteristica": "worst_area",
-        "importancia": 0.016031251260969,
-        "desvio": 0.01133304775281682
+        "importancia": 0.016031251260969066,
+        "desvio": 0.011333047752816813
       },
       {
         "caracteristica": "mean_concave_points",
-        "importancia": 0.014059789826436199,
-        "desvio": 0.00980846297786976
+        "importancia": 0.014059789826436292,
+        "desvio": 0.009808462977869763
       },
       {
         "caracteristica": "mean_texture",
-        "importancia": 0.01284847694787682,
-        "desvio": 0.009513914756171055
+        "importancia": 0.012848476947876905,
+        "desvio": 0.009513914756171062
       },
       {
         "caracteristica": "mean_concavity",
-        "importancia": 0.01184611542903667,
-        "desvio": 0.008757928503908314
+        "importancia": 0.011846115429036757,
+        "desvio": 0.008757928503908299
       },
       {
         "caracteristica": "worst_fractal_dimension",
-        "importancia": 0.010634245635330651,
-        "desvio": 0.0043007563061677094
+        "importancia": 0.010634245635330716,
+        "desvio": 0.004300756306167706
       },
       {
         "caracteristica": "mean_radius",
-        "importancia": 0.009878885095762584,
-        "desvio": 0.007858815070491165
+        "importancia": 0.009878885095762669,
+        "desvio": 0.007858815070491144
       },
       {
         "caracteristica": "mean_perimeter",
-        "importancia": 0.009273729174376745,
-        "desvio": 0.007611819188805348
+        "importancia": 0.009273729174376825,
+        "desvio": 0.007611819188805346
       },
       {
         "caracteristica": "worst_symmetry",
-        "importancia": 0.009164382034678268,
-        "desvio": 0.010420456279538515
+        "importancia": 0.009164382034678368,
+        "desvio": 0.010420456279538522
       },
       {
         "caracteristica": "mean_area",
-        "importancia": 0.008410972975892942,
-        "desvio": 0.007425258175529734
+        "importancia": 0.008410972975893017,
+        "desvio": 0.007425258175529719
       },
       {
         "caracteristica": "mean_fractal_dimension",
-        "importancia": 0.008188142347901498,
-        "desvio": 0.004319698468266028
+        "importancia": 0.008188142347901571,
+        "desvio": 0.004319698468266014
       },
       {
         "caracteristica": "se_compactness",
-        "importancia": 0.007615091919421844,
-        "desvio": 0.008395283938612726
+        "importancia": 0.0076150919194219215,
+        "desvio": 0.008395283938612715
       },
       {
         "caracteristica": "se_radius",
-        "importancia": 0.005421512370182841,
-        "desvio": 0.006759162431735955
+        "importancia": 0.005421512370182924,
+        "desvio": 0.006759162431735968
       },
       {
         "caracteristica": "se_fractal_dimension",
-        "importancia": 0.003798421689487464,
-        "desvio": 0.004178525396103188
+        "importancia": 0.003798421689487536,
+        "desvio": 0.0041785253961031865
       },
       {
         "caracteristica": "se_perimeter",
-        "importancia": 0.003782502595452608,
-        "desvio": 0.005510952264391832
+        "importancia": 0.0037825025954526747,
+        "desvio": 0.005510952264391826
       },
       {
         "caracteristica": "se_area",
-        "importancia": 0.0027796200078404765,
-        "desvio": 0.004926906923444375
+        "importancia": 0.0027796200078405377,
+        "desvio": 0.004926906923444385
       },
       {
         "caracteristica": "worst_compactness",
-        "importancia": 0.0021656315303643014,
-        "desvio": 0.0020930632583698637
+        "importancia": 0.0021656315303643964,
+        "desvio": 0.0020930632583698603
       },
       {
         "caracteristica": "se_symmetry",
-        "importancia": 0.001999334547978332,
-        "desvio": 0.002808283403328734
+        "importancia": 0.0019993345479783664,
+        "desvio": 0.0028082834033287033
       },
       {
         "caracteristica": "se_texture",
-        "importancia": 0.001823535461566934,
-        "desvio": 0.003989049828093662
+        "importancia": 0.0018235354615669982,
+        "desvio": 0.003989049828093671
       },
       {
         "caracteristica": "mean_smoothness",
-        "importancia": 0.0018095131188991442,
-        "desvio": 0.004047963981256266
+        "importancia": 0.00180951311889921,
+        "desvio": 0.004047963981256255
       },
       {
         "caracteristica": "se_concavity",
-        "importancia": 0.0015530464922194542,
-        "desvio": 0.00147846187912784
+        "importancia": 0.0015530464922195355,
+        "desvio": 0.0014784618791278178
       },
       {
         "caracteristica": "mean_symmetry",
-        "importancia": 0.001025677879022777,
-        "desvio": 0.0027604767414804356
+        "importancia": 0.0010256778790228669,
+        "desvio": 0.0027604767414804525
       },
       {
         "caracteristica": "mean_compactness",
-        "importancia": 0.0005377043131902802,
-        "desvio": 0.001610089764095878
+        "importancia": 0.000537704313190356,
+        "desvio": 0.0016100897640958585
       },
       {
         "caracteristica": "se_concave_points",
-        "importancia": 0.00031575946775432067,
-        "desvio": 0.002095662590284
+        "importancia": 0.00031575946775438957,
+        "desvio": 0.0020956625902840043
       },
       {
         "caracteristica": "se_smoothness",
-        "importancia": -0.0015557826897476025,
-        "desvio": 0.0028819859734179934
+        "importancia": -0.001555782689747528,
+        "desvio": 0.0028819859734179718
       }
     ]
   }
