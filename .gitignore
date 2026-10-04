@@ -4,3 +4,8 @@ __pycache__/
 *.pyc
 wandb/
 .env
+*.db
+instance/
+node_modules/
+frontend/dist/
+ml/artifacts/report/

@@ -1,16 +1,167 @@
 {
-  "regressao_logistica": {
-    "acuracia": 0.9649122807017544,
-    "sensibilidade": 0.9285714285714286,
-    "especificidade": 0.9861111111111112,
-    "auc": 0.996031746031746,
-    "taxa_falsos_negativos": 0.07142857142857142
-  },
-  "svm": {
-    "acuracia": 0.9736842105263158,
-    "sensibilidade": 0.9285714285714286,
-    "especificidade": 1.0,
-    "auc": 0.9947089947089947,
-    "taxa_falsos_negativos": 0.07142857142857142
+  "gerado_em": "2026-10-04T15:34:07.690717+00:00",
+  "classe_positiva": "maligno",
+  "meta_sensibilidade": 0.97,
+  "melhor_modelo": "regressao_logistica",
+  "criterio_melhor_modelo": "Maior sensibilidade no ponto de operação (limiar de segurança); desempate por AUC e depois por especificidade.",
+  "modelos": {
+    "regressao_logistica": {
+      "limiar_padrao": 0.5,
+      "limiar_seguranca": 0.31,
+      "limiar_atingiu_meta_no_treino": true,
+      "teste_padrao": {
+        "acuracia": 0.9649122807017544,
+        "sensibilidade": 0.9285714285714286,
+        "especificidade": 0.9861111111111112,
+        "auc": 0.996031746031746,
+        "taxa_falsos_negativos": 0.07142857142857142,
+        "matriz_confusao": {
+          "vn": 71,
+          "fp": 1,
+          "fn": 3,
+          "vp": 39
+        }
+      },
+      "teste_operacao": {
+        "acuracia": 0.9824561403508771,
+        "sensibilidade": 0.9761904761904762,
+        "especificidade": 0.9861111111111112,
+        "auc": 0.996031746031746,
+        "taxa_falsos_negativos": 0.023809523809523808,
+        "matriz_confusao": {
+          "vn": 71,
+          "fp": 1,
+          "fn": 1,
+          "vp": 41
+        }
+      },
+      "atende_meta_sensibilidade_teste": true,
+      "validacao_cruzada": {
+        "acuracia": {
+          "media": 0.9736263736263737,
+          "desvio": 0.0166656603165968
+        },
+        "sensibilidade": {
+          "media": 0.9529411764705882,
+          "desvio": 0.044605149670891485
+        },
+        "especificidade": {
+          "media": 0.9859649122807017,
+          "desvio": 0.01921833535105846
+        },
+        "auc": {
+          "media": 0.9957688338493291,
+          "desvio": 0.005216409476202312
+        },
+        "taxa_falsos_negativos": {
+          "media": 0.047058823529411764,
+          "desvio": 0.04460514967089147
+        },
+        "folds": 5
+      },
+      "roc": {
+        "fpr": [
+          0.0,
+          0.0,
+          0.0,
+          0.01389,
+          0.01389,
+          0.13889,
+          0.13889,
+          1.0
+        ],
+        "tpr": [
+          0.0,
+          0.02381,
+          0.92857,
+          0.92857,
+          0.97619,
+          0.97619,
+          1.0,
+          1.0
+        ]
+      }
+    },
+    "svm": {
+      "limiar_padrao": 0.5,
+      "limiar_seguranca": 0.42,
+      "limiar_atingiu_meta_no_treino": true,
+      "teste_padrao": {
+        "acuracia": 0.9649122807017544,
+        "sensibilidade": 0.9523809523809523,
+        "especificidade": 0.9722222222222222,
+        "auc": 0.9947089947089947,
+        "taxa_falsos_negativos": 0.047619047619047616,
+        "matriz_confusao": {
+          "vn": 70,
+          "fp": 2,
+          "fn": 2,
+          "vp": 40
+        }
+      },
+      "teste_operacao": {
+        "acuracia": 0.9736842105263158,
+        "sensibilidade": 0.9761904761904762,
+        "especificidade": 0.9722222222222222,
+        "auc": 0.9947089947089947,
+        "taxa_falsos_negativos": 0.023809523809523808,
+        "matriz_confusao": {
+          "vn": 70,
+          "fp": 2,
+          "fn": 1,
+          "vp": 41
+        }
+      },
+      "atende_meta_sensibilidade_teste": true,
+      "validacao_cruzada": {
+        "acuracia": {
+          "media": 0.9758241758241759,
+          "desvio": 0.00919406622564919
+        },
+        "sensibilidade": {
+          "media": 0.9588235294117646,
+          "desvio": 0.044605149670891485
+        },
+        "especificidade": {
+          "media": 0.9859649122807017,
+          "desvio": 0.01467824607954519
+        },
+        "auc": {
+          "media": 0.9949432404540763,
+          "desvio": 0.005550254616934926
+        },
+        "taxa_falsos_negativos": {
+          "media": 0.0411764705882353,
+          "desvio": 0.04460514967089148
+        },
+        "folds": 5
+      },
+      "roc": {
+        "fpr": [
+          0.0,
+          0.0,
+          0.0,
+          0.01389,
+          0.01389,
+          0.02778,
+          0.02778,
+          0.18056,
+          0.18056,
+          1.0
+        ],
+        "tpr": [
+          0.0,
+          0.02381,
+          0.92857,
+          0.92857,
+          0.95238,
+          0.95238,
+          0.97619,
+          0.97619,
+          1.0,
+          1.0
+        ]
+      }
+    }
   }
 }

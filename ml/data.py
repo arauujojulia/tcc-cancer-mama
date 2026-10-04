@@ -1,4 +1,5 @@
 import os
+from functools import lru_cache
 
 import pandas as pd
 
@@ -19,6 +20,10 @@ COLUMN_NAMES = (
 )
 FEATURE_COLUMNS = COLUMN_NAMES[2:]  # tudo, exceto id e diagnosis
 
+# Margem aplicada às faixas observadas na base para validar entradas
+# (documentação, fluxo 2: "faixas do schema + margem de 20%").
+MARGEM_FAIXA = 0.20
+
 
 def load_data(path: str = DATA_PATH):
     """
@@ -33,3 +38,40 @@ def load_data(path: str = DATA_PATH):
     y = (df["diagnosis"] == "M").astype(int).values  # 1 = maligno, 0 = benigno
 
     return X, y, FEATURE_COLUMNS
+
+
+@lru_cache(maxsize=1)
+def feature_schema():
+    """
+    Schema das 30 características (US01): para cada uma, o intervalo
+    observado na base WDBC (min/max) e o intervalo aceito na validação
+    (observado ± MARGEM_FAIXA da amplitude, nunca abaixo de zero, pois
+    todas as medidas do WDBC são não negativas).
+
+    Também devolve um exemplo real de cada classe, para demonstração.
+    """
+    df = pd.read_csv(DATA_PATH, header=None, names=COLUMN_NAMES)
+    campos = []
+    for nome in FEATURE_COLUMNS:
+        lo, hi = float(df[nome].min()), float(df[nome].max())
+        folga = (hi - lo) * MARGEM_FAIXA
+        campos.append({
+            "nome": nome,
+            "grupo": nome.split("_", 1)[0],          # mean | se | worst
+            "medida": nome.split("_", 1)[1],
+            "min_observado": lo,
+            "max_observado": hi,
+            "min_aceito": max(0.0, lo - folga),
+            "max_aceito": hi + folga,
+        })
+
+    def _exemplo(diag):
+        linha = df[df["diagnosis"] == diag].iloc[0]
+        return {n: float(linha[n]) for n in FEATURE_COLUMNS}
+
+    return {
+        "n_caracteristicas": len(campos),
+        "margem_faixa": MARGEM_FAIXA,
+        "campos": campos,
+        "exemplos": {"maligno": _exemplo("M"), "benigno": _exemplo("B")},
+    }
