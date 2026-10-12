@@ -11,21 +11,11 @@ sequenceDiagram
     participant DB as 🗄️ Database (PostgreSQL 16)
 
     %% -----------------------------------------------------------------
-    %% FLUXO 1: AUTENTICAÇÃO E CONTROLE DE ACESSO (BSC-12)
+    %% FLUXO 1: SELEÇÃO DE PERFIL (BSC-12)
     %% -----------------------------------------------------------------
-    Note over Medico, DB: 1. Autenticação e Controle de Acesso (BSC-12)
-    Medico->>FE: Informa e-mail e senha na tela de login
-    FE->>BE: POST /api/v1/auth/login
-    BE->>DB: Consulta tabela 'users' por e-mail
-    DB-->>BE: Retorna hash da senha e perfil (role)
-    alt Credenciais Válidas
-        BE->>BE: Valida hash de senha e gera JWT (Validade: 8h)
-        BE-->>FE: HTTP 200 OK (JWT Token + Role)
-        FE->>FE: Salva token e renderiza navegação conforme o Perfil
-    else Credenciais Inválidas
-        BE-->>FE: HTTP 401 Unauthorized
-        FE-->>Medico: Exibe mensagem de erro de login
-    end
+    Note over Medico, FE: 1. Seleção de Perfil (BSC-12)
+    Medico->>FE: Acessa o sistema e seleciona o perfil de uso
+    FE->>FE: Renderiza navegação conforme o Perfil (Médico ou Pesquisador)
 
     %% -----------------------------------------------------------------
     %% FLUXO 2: AVALIAÇÃO E PREDIÇÃO DE BIÓPSIA (BSC-13 a BSC-16, BSC-23, BSC-25, BSC-26)
@@ -39,12 +29,10 @@ sequenceDiagram
     FE->>FE: Validação no cliente (faixas do schema + margem de 20%)
     Medico->>FE: Escolhe modo (Anônimo ou Identificado) e clica em "Classificar"
     
-    FE->>BE: POST /api/v1/predictions (Header JWT + Payload)
-    BE->>BE: Middleware valida autorização de perfil
+    FE->>BE: POST /api/v1/predictions (Payload)
     
-    alt Opção por Registro Identificado (BSC-25)
-        BE->>BE: Cifra patient_name e patient_record via AES-256-GCM
-        BE->>DB: Registra log de auditoria em 'access_audit'
+    opt Opção por Registro Identificado (BSC-25)
+        BE->>BE: Associa patient_name e patient_record ao registro da avaliação
     end
     
     BE->>ML: Passa vetor numérico das 30 características
@@ -98,7 +86,7 @@ sequenceDiagram
     FE->>BE: PUT /api/v1/models/{id}/threshold (BSC-20)
     
     alt Sensibilidade >= 0.97 (BSC-20)
-        BE->>DB: Atualiza limiar do modelo e grava trilha de autoria
+        BE->>DB: Atualiza limiar do modelo
         BE-->>FE: HTTP 200 OK (Modelo promovido a Produção)
         FE-->>Pesquisador: Notifica sucesso na promoção do modelo
     else Sensibilidade < 0.97
