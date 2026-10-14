@@ -21,6 +21,11 @@ main { padding-bottom: 48px; }
 .topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 16px; }
 .topo h1 { font-size: 20px; margin: 0; }
 .perfil { display: flex; align-items: center; gap: 8px; color: var(--suave); }
+.auth { max-width: 440px; margin-inline: auto; margin-top: 32px; }
+.auth form { display: grid; gap: 12px; }
+.auth .radios { margin-bottom: 0; }
+.auth .nota { margin: 14px 0 0; }
+.auth .nota button { padding: 4px 10px; }
 .abas { display: flex; gap: 4px; margin-top: 12px; border-bottom: 1px solid var(--borda); }
 .abas button { background: none; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--suave); padding: 10px 14px; }
 .abas button.ativa { color: var(--texto); border-bottom-color: var(--primaria); font-weight: 600; }

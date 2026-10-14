@@ -167,7 +167,6 @@ export default function ClassificarPage() {
             <label className="campo"><span>Prontuário</span>
               <input value={paciente.prontuario} onChange={(e) => setPaciente({ ...paciente, prontuario: e.target.value })} maxLength={100} />
             </label>
-            <p className="ajuda">Nome e prontuário são armazenados cifrados (AES-256-GCM), conforme a LGPD.</p>
           </div>
         ) : (
           <p className="ajuda">Nenhum dado da paciente é armazenado; apenas as características e o resultado.</p>
