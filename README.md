@@ -29,14 +29,14 @@ pesquisador comparar os modelos.
 Frontend (React/Vite) ──HTTP/JSON──► API Flask ──► ML (scikit-learn, em memória)
                                         │
                                         ▼
-                                  PostgreSQL (SQLAlchemy)
+                                  SQL Server Express (SQLAlchemy)
 ```
 
 ```
 app.py                  # aplicação Flask (config por variáveis de ambiente, serve frontend/dist)
 api/routes.py           # endpoints REST
-services/               # regras de negócio: validation, crypto (AES-256-GCM), avaliacoes, modelos
-db/models.py            # Medico, Pesquisador, ModeloTreinado, Avaliacao
+services/               # regras de negócio: validation, avaliacoes, modelos
+db/models.py            # Usuario (papel médico/pesquisador), ModeloTreinado, Avaliacao
 ml/                     # data, train, predict, report
 ml/artifacts/           # modelos .joblib, metrics.json, feature_importance.json,
                         #   train_config.json, split.json (versionados — RNF03)
@@ -47,11 +47,10 @@ data/wdbc.data          # base pública WDBC
 
 ## Como rodar
 
-1. Dependências Python: `pip install -r requirements.txt`
-2. Configuração: copie `.env.example` para `.env` e preencha `DATABASE_URL`
-   (PostgreSQL; sem ela usa SQLite local) e `PACIENTE_ENCRYPTION_KEY`
-   (gere com `python -m services.crypto`; sem chave o modo *identificado*
-   é recusado).
+1. Dependências Python (use Python 3.14 ou anterior; o `pyodbc` ainda não tem pacote para o 3.15):
+   `pip install -r requirements.txt`. Requer o "ODBC Driver 18 for SQL Server".
+2. Configuração: copie `.env.example` para `.env` e preencha `DATABASE_URL` e `SECRET_KEY`
+   (SQL Server Express; crie antes o banco vazio `tcc_cancer_mama`, as tabelas são criadas pela aplicação).
 3. Treinar e avaliar (gera `ml/artifacts/`): `python -m ml.train`
 4. Figuras 300 DPI e CSV para o artigo: `python -m ml.report`
    (saída em `ml/artifacts/report/`)
@@ -59,7 +58,8 @@ data/wdbc.data          # base pública WDBC
 6. Frontend em desenvolvimento: `cd frontend && npm install && npm run dev`
    (http://localhost:5173, com proxy para a API). Para servir tudo pelo
    Flask: `npm run build` e abra http://localhost:5000.
-7. Testes: `python -m unittest discover -s tests -t . -v`
+7. Criar usuários: pela tela de cadastro, ou `python -m services.usuarios --nome ... --email ... --papel medico|pesquisador`.
+8. Testes: `python -m unittest discover -s tests -t . -v`
 
 ## API
 
@@ -83,8 +83,8 @@ POST /api/biopsias/classificar
 ```
 
 Para registro identificado: `"modo": "identificado", "paciente": {"nome": "...", "prontuario": "..."}`
-(cifrados com AES-256-GCM). Erros: `{"erro": "...", "codigo": "..."}` com 400 (dados inválidos),
-404, 503 (`MODEL_UNAVAILABLE`, `ENCRYPTION_UNAVAILABLE`).
+(texto livre). Erros: `{"erro": "...", "codigo": "..."}` com 400 (dados inválidos),
+404, 503 (`MODEL_UNAVAILABLE`).
 
 ## Decisões de projeto importantes
 
@@ -102,11 +102,16 @@ Para registro identificado: `"modo": "identificado", "paciente": {"nome": "...",
   e do dataset em `ml/artifacts/`.
 - **Histórico imutável:** `Avaliacao` não pode ser alterada nem removida
   pela aplicação.
-- **Ainda sem autenticação:** os perfis Médico/Pesquisador só definem o
-  menu do frontend. Login/JWT e RBAC (diagramas, fluxo 1) não fazem parte
-  das sprints 2 e 3 e continuam pendentes; até lá, a API não deve ser
-  exposta fora de ambiente controlado, pois o histórico identificado é
-  legível por quem acessar a rota.
+- **Autenticação por cookie de sessão** (`services/auth.py`): cookie `HttpOnly`,
+  `SameSite=Lax` e, em produção, `Secure`; sessão de 8 h. Cadastro aberto aos dois
+  papéis (`POST /api/auth/registrar`), `POST /api/auth/login`, `POST /api/auth/logout`
+  e `GET /api/auth/me`. Papéis aplicados no servidor (RBAC): o médico classifica
+  (`/biopsias/classificar`, `/avaliacoes/<id>`); o pesquisador acessa `/metricas*` e
+  `/modelos`; `/avaliacoes` e `/features/schema` valem para qualquer usuário logado.
+  Escritas exigem `Content-Type: application/json` (defesa de CSRF). O `medico_id`
+  da avaliação vem da sessão, nunca do corpo. A senha é guardada com hash (werkzeug).
+- **Dados do paciente em texto simples** no banco (nome e prontuário), por decisão do
+  projeto. Use apenas dados fictícios ou anonimizados fora de ambiente controlado.
 
 ## Progresso por sprint
 
@@ -121,6 +126,6 @@ Para registro identificado: `"modo": "identificado", "paciente": {"nome": "...",
 
 ## Pendências conhecidas
 
-- Autenticação JWT/RBAC e trilha de auditoria de acesso (`access_audit`).
+- Trilha de auditoria de acesso (`access_audit`) e limite de tentativas de login.
 - Busca em grade (GridSearchCV) e promoção de modelo por limiar via API
   (fluxo 4 dos diagramas) — fora das histórias das sprints 2 e 3.

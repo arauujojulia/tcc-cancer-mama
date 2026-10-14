@@ -1,17 +1,21 @@
 """
 Modelo de dados.
 
-Sprint 0 (HT03): Medico e Pesquisador.
+Sprint 0 (HT03): perfis de médico e pesquisador, hoje a tabela única Usuario
+(enum Papel + senha com hash).
 Sprint 2 (US06, US07): ModeloTreinado (registro dos treinamentos para
 reprodutibilidade) e Avaliacao (histórico de classificações).
 
-Sem login/autenticação por enquanto — Avaliacao.medico_id é opcional.
+Autenticação por cookie de sessão: services/auth.py. Avaliacao.medico_id aponta
+para usuarios (papel médico) e vem da sessão.
 """
 
+import enum
 from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import event
+from werkzeug.security import check_password_hash, generate_password_hash
 
 db = SQLAlchemy()
 
@@ -20,26 +24,36 @@ def _agora():
     return datetime.now(timezone.utc)
 
 
-class Medico(db.Model):
-    __tablename__ = "medicos"
+class Papel(str, enum.Enum):
+    MEDICO = "medico"
+    PESQUISADOR = "pesquisador"
+
+
+class Usuario(db.Model):
+    """Conta de acesso. O papel define o que o usuário pode fazer (RBAC, §5.1)."""
+
+    __tablename__ = "usuarios"
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
+    senha_hash = db.Column(db.String(256), nullable=False)
+    papel = db.Column(
+        db.Enum(Papel, name="papel_usuario", values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+    )
+    ativo = db.Column(db.Boolean, nullable=False, default=True)
+    criado_em = db.Column(db.DateTime(timezone=True), nullable=False, default=_agora)
+
+    def definir_senha(self, senha: str):
+        self.senha_hash = generate_password_hash(senha)
+
+    def senha_confere(self, senha: str) -> bool:
+        return check_password_hash(self.senha_hash, senha)
 
     def to_dict(self):
-        return {"id": self.id, "nome": self.nome, "email": self.email}
-
-
-class Pesquisador(db.Model):
-    __tablename__ = "pesquisadores"
-
-    id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(120), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-
-    def to_dict(self):
-        return {"id": self.id, "nome": self.nome, "email": self.email}
+        # nunca expõe senha_hash
+        return {"id": self.id, "nome": self.nome, "email": self.email, "papel": self.papel.value}
 
 
 class ModeloTreinado(db.Model):
@@ -92,7 +106,7 @@ class Avaliacao(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     criado_em = db.Column(db.DateTime(timezone=True), nullable=False, default=_agora)
-    medico_id = db.Column(db.Integer, db.ForeignKey("medicos.id"), nullable=True)
+    medico_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=True)
     modelo_id = db.Column(db.Integer, db.ForeignKey("modelos_treinados.id"), nullable=True)
 
     caracteristicas = db.Column(db.JSON, nullable=False)  # as 30 características informadas
@@ -103,12 +117,12 @@ class Avaliacao(db.Model):
     limiar_utilizado = db.Column(db.Float, nullable=False)
     tempo_resposta_ms = db.Column(db.Float, nullable=False)
 
-    # Dados do paciente: somente no modo identificado, sempre cifrados (AES-256-GCM).
+    # Dados do paciente: somente no modo identificado. O prontuário é texto livre.
     identificado = db.Column(db.Boolean, nullable=False, default=False)
-    paciente_nome_cifrado = db.Column(db.Text)
-    paciente_prontuario_cifrado = db.Column(db.Text)
+    paciente_nome = db.Column(db.String(200))
+    paciente_prontuario = db.Column(db.String(100))
 
-    medico = db.relationship("Medico")
+    medico = db.relationship("Usuario")
     modelo = db.relationship("ModeloTreinado")
 
     __table_args__ = (

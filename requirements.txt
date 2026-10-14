@@ -1,11 +1,10 @@
 flask
 flask-cors
 flask-sqlalchemy
-psycopg2-binary
+pyodbc
 scikit-learn
 pandas
 numpy
 joblib
 python-dotenv
-cryptography
 matplotlib

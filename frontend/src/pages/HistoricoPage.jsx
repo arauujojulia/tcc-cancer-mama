@@ -74,7 +74,7 @@ export default function HistoricoPage() {
                       <td>{pct(a.confianca)}</td>
                       <td>{pct(a.probabilidade_maligno)}</td>
                       <td>{a.modelo_utilizado ? nomeModelo(a.modelo_utilizado) : "—"}</td>
-                      <td>{!a.identificado ? "Anônimo" : a.paciente?.indisponivel ? "Identificado (ilegível)" : `${a.paciente?.nome} · ${a.paciente?.prontuario}`}</td>
+                      <td>{!a.identificado ? "Anônimo" : `${a.paciente?.nome} · ${a.paciente?.prontuario}`}</td>
                       <td>{Math.round(a.tempo_resposta_ms)} ms</td>
                     </tr>
                   ))}

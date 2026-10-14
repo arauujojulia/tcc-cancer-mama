@@ -2,14 +2,17 @@ import json
 import os
 import time
 
-from flask import Blueprint, Response, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, g, jsonify, request
 
 from ml.data import FEATURE_COLUMNS, feature_schema
 from ml.predict import ModeloIndisponivel, load_bundle, predict
 from ml.report import metricas_csv
 from ml.train import ARTIFACTS_DIR, SENSIBILIDADE_MINIMA
+from db.models import Papel
+from services import auth as svc_auth
 from services import avaliacoes as svc_avaliacoes
-from services import crypto
+from services.auth import exigir_login
+from services.usuarios import ErroUsuario, criar_usuario
 from services.validation import (
     ErroValidacao,
     validar_caracteristicas,
@@ -35,6 +38,14 @@ def _artefato(nome):
         return json.load(f)
 
 
+@api_bp.before_request
+def _exigir_json_nas_escritas():
+    # Defesa de CSRF, somada ao cookie SameSite=Lax: um formulário de outro site não
+    # consegue enviar Content-Type application/json sem passar por CORS.
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and not request.is_json:
+        return _erro("Use Content-Type: application/json.", 415, "CONTENT_TYPE_INVALIDO")
+
+
 @api_bp.errorhandler(ErroValidacao)
 def _tratar_validacao(e):
     return _erro(e.mensagem, 400, e.codigo, **e.detalhes)
@@ -49,19 +60,62 @@ def _tratar_modelo_indisponivel(e):
     )
 
 
-@api_bp.errorhandler(crypto.CryptoConfigError)
-def _tratar_cripto(e):
-    current_app.logger.error("Cifragem não configurada: %s", e)
-    return _erro(
-        "Registro identificado indisponível: cifragem não configurada no servidor.",
-        503, "ENCRYPTION_UNAVAILABLE",
-    )
+# ----------------------------------------------------------------------
+# Autenticação (cookie de sessão)
+# ----------------------------------------------------------------------
+def _campo_texto(payload, nome):
+    valor = payload.get(nome)
+    return valor if isinstance(valor, str) else ""
+
+
+@api_bp.route("/auth/registrar", methods=["POST"])
+def registrar_usuario():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        raise ErroValidacao("O corpo da requisição deve ser um objeto JSON.")
+    try:
+        usuario = criar_usuario(
+            nome=_campo_texto(payload, "nome"),
+            email=_campo_texto(payload, "email"),
+            senha=_campo_texto(payload, "senha"),
+            papel=_campo_texto(payload, "papel"),
+        )
+    except ErroUsuario as e:
+        status, codigo = (409, "EMAIL_JA_CADASTRADO") if "Já existe" in str(e) else (400, "DADOS_INVALIDOS")
+        return _erro(str(e), status, codigo)
+    return jsonify(usuario.to_dict()), 201
+
+
+@api_bp.route("/auth/login", methods=["POST"])
+def login():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        raise ErroValidacao("O corpo da requisição deve ser um objeto JSON.")
+    usuario = svc_auth.autenticar(_campo_texto(payload, "email"), _campo_texto(payload, "senha"))
+    if usuario is None:
+        # mensagem única: não revela se o e-mail existe ou se a conta está inativa
+        return _erro("E-mail ou senha inválidos.", 401, "CREDENCIAIS_INVALIDAS")
+    svc_auth.iniciar_sessao(usuario)
+    return jsonify(usuario.to_dict())
+
+
+@api_bp.route("/auth/logout", methods=["POST"])
+def logout():
+    svc_auth.encerrar_sessao()
+    return jsonify({"ok": True})
+
+
+@api_bp.route("/auth/me", methods=["GET"])
+@exigir_login()
+def eu():
+    return jsonify(g.usuario.to_dict())
 
 
 # ----------------------------------------------------------------------
 # US01 — formulário
 # ----------------------------------------------------------------------
 @api_bp.route("/features/schema", methods=["GET"])
+@exigir_login()
 def schema():
     return jsonify(feature_schema())
 
@@ -70,6 +124,7 @@ def schema():
 # US02 / US03 / US07 — classificação com registro automático
 # ----------------------------------------------------------------------
 @api_bp.route("/biopsias/classificar", methods=["POST"])
+@exigir_login(Papel.MEDICO)
 def classificar():
     inicio = time.perf_counter()
     payload = request.get_json(silent=True)
@@ -82,17 +137,6 @@ def classificar():
     identificado, nome, prontuario = validar_paciente(
         payload.get("modo", "anonimo"), payload.get("paciente")
     )
-
-    medico_id = payload.get("medico_id")
-    if medico_id is not None:
-        if isinstance(medico_id, bool) or not isinstance(medico_id, int):
-            raise ErroValidacao("'medico_id' deve ser um inteiro.")
-        if not svc_avaliacoes.medico_existe(medico_id):
-            return _erro("Médico não encontrado.", 404, "MEDICO_NAO_ENCONTRADO")
-
-    # Falha cedo e sem gravar nada se a cifragem não estiver configurada.
-    if identificado:
-        crypto.cifrar("verificacao")
 
     resultado = predict(features)
     tempo_ms = (time.perf_counter() - inicio) * 1000
@@ -107,7 +151,7 @@ def classificar():
         identificado=identificado,
         nome=nome,
         prontuario=prontuario,
-        medico_id=medico_id,
+        medico_id=g.usuario.id,  # sempre o médico da sessão, nunca o do corpo
     )
 
     return jsonify({
@@ -124,11 +168,13 @@ def classificar():
 # US07 — histórico
 # ----------------------------------------------------------------------
 @api_bp.route("/avaliacoes", methods=["GET"])
+@exigir_login()
 def listar_avaliacoes():
     return jsonify(svc_avaliacoes.listar(validar_filtros_historico(request.args)))
 
 
 @api_bp.route("/avaliacoes/<int:avaliacao_id>", methods=["GET"])
+@exigir_login(Papel.MEDICO)
 def obter_avaliacao(avaliacao_id):
     av = svc_avaliacoes.obter(avaliacao_id)
     if av is None:
@@ -140,6 +186,7 @@ def obter_avaliacao(avaliacao_id):
 # US05 / US06 — métricas, importância, reprodutibilidade
 # ----------------------------------------------------------------------
 @api_bp.route("/metricas", methods=["GET"])
+@exigir_login(Papel.PESQUISADOR)
 def metricas():
     bundle = load_bundle()  # levanta ModeloIndisponivel se não houver treino
     metrics, config = bundle["metrics"], _artefato("train_config.json")
@@ -161,6 +208,7 @@ def metricas():
 
 
 @api_bp.route("/metricas/features", methods=["GET"])
+@exigir_login(Papel.PESQUISADOR)
 def importancia_features():
     load_bundle()
     dados = _artefato("feature_importance.json")
@@ -182,6 +230,7 @@ def importancia_features():
 
 
 @api_bp.route("/metricas/export", methods=["GET"])
+@exigir_login(Papel.PESQUISADOR)
 def exportar_metricas():
     if request.args.get("format", "csv") != "csv":
         raise ErroValidacao("Formato não suportado; use format=csv.")
@@ -193,6 +242,7 @@ def exportar_metricas():
 
 
 @api_bp.route("/modelos", methods=["GET"])
+@exigir_login(Papel.PESQUISADOR)
 def listar_modelos():
     from db.models import ModeloTreinado
 

@@ -8,7 +8,7 @@ sequenceDiagram
     participant FE as 🖥️ Frontend (React)
     participant BE as ⚙️ Backend (Flask API)
     participant ML as 🧠 ML Engine (Scikit-Learn)
-    participant DB as 🗄️ Database (PostgreSQL 16)
+    participant DB as 🗄️ Database (SQL Server)
 
     %% -----------------------------------------------------------------
     %% FLUXO 1: SELEÇÃO DE PERFIL (BSC-12)

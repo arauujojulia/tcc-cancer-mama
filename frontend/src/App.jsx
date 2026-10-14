@@ -1,47 +1,48 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import AuthPage from "./pages/AuthPage.jsx";
 import ClassificarPage from "./pages/ClassificarPage.jsx";
 import HistoricoPage from "./pages/HistoricoPage.jsx";
 import ModelosPage from "./pages/ModelosPage.jsx";
+import { getUsuarioAtual, sair as sairApi } from "./api.js";
+import { PERFIS } from "./perfis.js";
 
-// Perfis (HT03). Ainda sem login: o perfil só decide quais telas o menu mostra.
-const PERFIS = {
-  medico: {
-    rotulo: "Médico",
-    abas: [
-      ["classificar", "Nova classificação"],
-      ["historico", "Histórico"],
-    ],
-  },
-  pesquisador: {
-    rotulo: "Pesquisador",
-    abas: [
-      ["modelos", "Laboratório de modelos"],
-      ["historico", "Histórico"],
-    ],
-  },
-};
-
-const lerPerfil = () => {
-  try {
-    const salvo = localStorage.getItem("perfil");
-    return salvo in PERFIS ? salvo : "medico";
-  } catch {
-    return "medico";
-  }
-};
+const abaInicial = (s) => (s ? PERFIS[s.papel].abas[0][0] : null);
 
 export default function App() {
-  const [perfil, setPerfil] = useState(lerPerfil);
-  const [aba, setAba] = useState(PERFIS[lerPerfil()].abas[0][0]);
+  // A sessão vive no cookie HttpOnly do servidor; aqui só guardamos o usuário que ele devolve.
+  const [sessao, setSessao] = useState(null);
+  const [aba, setAba] = useState(null);
+  const [verificando, setVerificando] = useState(true);
 
-  const trocarPerfil = (novo) => {
-    setPerfil(novo);
-    setAba(PERFIS[novo].abas[0][0]);
+  useEffect(() => {
+    getUsuarioAtual()
+      .then((u) => {
+        setSessao(u);
+        setAba(abaInicial(u));
+      })
+      .catch(() => {})
+      .finally(() => setVerificando(false));
+    const expirou = () => {
+      setSessao(null);
+      setAba(null);
+    };
+    window.addEventListener("sessao-expirada", expirou);
+    return () => window.removeEventListener("sessao-expirada", expirou);
+  }, []);
+
+  const entrar = (usuario) => {
+    setSessao(usuario);
+    setAba(abaInicial(usuario));
+  };
+
+  const sair = async () => {
     try {
-      localStorage.setItem("perfil", novo);
+      await sairApi();
     } catch {
-      /* armazenamento indisponível */
+      /* mesmo sem resposta, volta para o login */
     }
+    setSessao(null);
+    setAba(null);
   };
 
   return (
@@ -54,31 +55,37 @@ export default function App() {
 
       <header className="topo">
         <h1>Triagem de risco de câncer de mama</h1>
-        <label className="perfil">
-          Perfil
-          <select value={perfil} onChange={(e) => trocarPerfil(e.target.value)}>
-            {Object.entries(PERFIS).map(([id, p]) => (
-              <option key={id} value={id}>
-                {p.rotulo}
-              </option>
-            ))}
-          </select>
-        </label>
+        {sessao && (
+          <div className="perfil">
+            <span>{PERFIS[sessao.papel].rotulo} · {sessao.nome}</span>
+            <button type="button" className="secundario" onClick={sair}>Sair</button>
+          </div>
+        )}
       </header>
 
-      <nav className="abas" aria-label="Seções">
-        {PERFIS[perfil].abas.map(([id, rotulo]) => (
-          <button key={id} className={aba === id ? "ativa" : ""} aria-current={aba === id ? "page" : undefined} onClick={() => setAba(id)}>
-            {rotulo}
-          </button>
-        ))}
-      </nav>
+      {verificando ? (
+        <main><p className="ajuda">Carregando…</p></main>
+      ) : !sessao ? (
+        <main>
+          <AuthPage onEntrar={entrar} />
+        </main>
+      ) : (
+        <>
+          <nav className="abas" aria-label="Seções">
+            {PERFIS[sessao.papel].abas.map(([id, rotulo]) => (
+              <button key={id} className={aba === id ? "ativa" : ""} aria-current={aba === id ? "page" : undefined} onClick={() => setAba(id)}>
+                {rotulo}
+              </button>
+            ))}
+          </nav>
 
-      <main>
-        {aba === "classificar" && <ClassificarPage />}
-        {aba === "historico" && <HistoricoPage />}
-        {aba === "modelos" && <ModelosPage />}
-      </main>
+          <main>
+            {aba === "classificar" && <ClassificarPage />}
+            {aba === "historico" && <HistoricoPage />}
+            {aba === "modelos" && <ModelosPage />}
+          </main>
+        </>
+      )}
     </>
   );
 }
