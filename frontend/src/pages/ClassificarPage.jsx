@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, classificar, getSchema } from "../api.js";
-import { GRUPOS, MEDIDAS, nomeModelo, pct } from "../components/format.js";
-
-const ORDEM_GRUPOS = ["mean", "se", "worst"];
+import { ApiError, getFeatureSchema, predict } from "../api.js";
+import { Alert, ResultBadge, StateBlock } from "../components/ui.jsx";
+import { GRUPOS, VARIACOES, agruparPorMedidaBase, nomeModelo, pct, rotuloFaixaConfianca } from "../components/format.js";
 
 /** Lê um CSV (UC01 / BSC-13): cabeçalho com os nomes + 1 linha, ou 30 valores em sequência. */
 export function parseCsv(texto, nomes) {
@@ -31,6 +30,7 @@ function validarCampo(valor, campo) {
   if (valor === undefined || String(valor).trim() === "") return "Obrigatório";
   const v = Number(String(valor).replace(",", "."));
   if (!Number.isFinite(v)) return "Valor numérico inválido";
+  // Margem de 20% já embutida em min_aceito/max_aceito do schema.
   if (v < campo.min_aceito || v > campo.max_aceito)
     return `Fora da faixa esperada (${campo.min_aceito.toPrecision(3)} a ${campo.max_aceito.toPrecision(3)})`;
   return null;
@@ -50,9 +50,10 @@ export default function ClassificarPage() {
   const resultadoRef = useRef(null);
 
   useEffect(() => {
-    getSchema().then(setSchema).catch((e) => setErroSchema(e.message));
+    getFeatureSchema().then(setSchema).catch((e) => setErroSchema(e.message));
   }, []);
 
+  const grupos = useMemo(() => (schema ? agruparPorMedidaBase(schema.campos) : []), [schema]);
   const erros = useMemo(() => {
     if (!schema) return {};
     return Object.fromEntries(schema.campos.map((c) => [c.nome, validarCampo(valores[c.nome], c)]));
@@ -87,55 +88,72 @@ export default function ClassificarPage() {
     setErro(null);
     setResultado(null);
     try {
-      const caracteristicas = Object.fromEntries(
+      const features = Object.fromEntries(
         schema.campos.map((c) => [c.nome, Number(String(valores[c.nome]).replace(",", "."))])
       );
-      const corpo = { caracteristicas, modo };
-      if (modo === "identificado") corpo.paciente = { nome: paciente.nome.trim(), prontuario: paciente.prontuario.trim() };
-      setResultado(await classificar(corpo));
+      const corpo = { features, mode: modo };
+      if (modo === "identificado") {
+        corpo.patient_name = paciente.nome.trim();
+        corpo.patient_record = paciente.prontuario.trim();
+      }
+      const resposta = await predict(corpo);
+      setResultado(resposta);
       setTimeout(() => resultadoRef.current?.focus(), 0);
     } catch (err) {
-      // Os dados do formulário são mantidos para uma nova tentativa (BSC-16).
+      // BSC-16 / RNF — erro de classificação (503/504) NÃO limpa o formulário.
       setErro(err instanceof ApiError ? err : new ApiError(err.message));
     } finally {
       setEnviando(false);
     }
   };
 
-  if (erroSchema) return <p className="erro" role="alert">Não foi possível carregar o formulário: {erroSchema}</p>;
-  if (!schema) return <p>Carregando formulário…</p>;
+  if (erroSchema) {
+    return (
+      <section className="card">
+        <StateBlock kind="error" title="Não foi possível carregar o formulário">{erroSchema}</StateBlock>
+      </section>
+    );
+  }
+  if (!schema) {
+    return (
+      <section className="card">
+        <StateBlock kind="loading" title="Carregando formulário…" />
+      </section>
+    );
+  }
 
   return (
     <form onSubmit={enviar} noValidate>
-      <section className="cartao">
+      <section className="card">
         <h2>Características da biópsia</h2>
-        <p className="ajuda">
-          Informe as 30 medidas quantitativas extraídas da punção aspirativa (padrão WDBC).
+        <p className="card-help">
+          Informe as 30 medidas quantitativas extraídas da punção aspirativa por agulha fina (padrão WDBC),
+          agrupadas pelas 10 medidas base. Cada medida tem três variações: média, erro padrão e pior valor.
         </p>
-        <div className="acoes">
-          <button type="button" className="secundario" onClick={() => preencher(schema.exemplos.maligno)}>
+        <div className="btn-group" style={{ marginBottom: "var(--space-4)" }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => preencher(schema.exemplos.maligno)}>
             Exemplo da base (maligno)
           </button>
-          <button type="button" className="secundario" onClick={() => preencher(schema.exemplos.benigno)}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => preencher(schema.exemplos.benigno)}>
             Exemplo da base (benigno)
           </button>
-          <label className="botao secundario">
+          <label className="btn btn-secondary btn-sm">
             Importar CSV
             <input type="file" accept=".csv,.txt" onChange={importarCsv} hidden />
           </label>
-          <button type="button" className="secundario" onClick={() => preencher({})}>Limpar</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => preencher({})}>Limpar</button>
         </div>
-        {avisoCsv && <p className="ajuda" role="status">{avisoCsv}</p>}
+        {avisoCsv && <p className="card-help" role="status">{avisoCsv}</p>}
 
-        {ORDEM_GRUPOS.map((g) => (
-          <fieldset key={g}>
-            <legend>{GRUPOS[g]}</legend>
-            <div className="grade-campos">
-              {schema.campos.filter((c) => c.grupo === g).map((c) => {
+        {grupos.map((g) => (
+          <fieldset key={g.medida} className="feature-group">
+            <legend>{g.label}</legend>
+            <div className="feature-group-grid">
+              {g.campos.map((c) => {
                 const msg = tocados[c.nome] ? erros[c.nome] : null;
                 return (
-                  <label key={c.nome} className={msg ? "campo com-erro" : "campo"}>
-                    <span>{MEDIDAS[c.medida] || c.medida}</span>
+                  <label key={c.nome} className={`field ${msg ? "has-error" : ""}`}>
+                    <span className="field-label">{GRUPOS[c.grupo]}</span>
                     <input
                       inputMode="decimal"
                       value={valores[c.nome] ?? ""}
@@ -144,7 +162,7 @@ export default function ClassificarPage() {
                       aria-invalid={msg ? "true" : undefined}
                       aria-describedby={msg ? `e-${c.nome}` : undefined}
                     />
-                    {msg && <small id={`e-${c.nome}`}>{msg}</small>}
+                    {msg && <span className="field-error" id={`e-${c.nome}`}>{msg}</span>}
                   </label>
                 );
               })}
@@ -153,59 +171,90 @@ export default function ClassificarPage() {
         ))}
       </section>
 
-      <section className="cartao">
+      <section className="card">
         <h2>Registro da avaliação</h2>
-        <div className="radios" role="radiogroup" aria-label="Modo de registro">
+        <div className="radiogroup" role="radiogroup" aria-label="Modo de registro">
           <label><input type="radio" name="modo" checked={modo === "anonimo"} onChange={() => setModo("anonimo")} /> Anônimo</label>
           <label><input type="radio" name="modo" checked={modo === "identificado"} onChange={() => setModo("identificado")} /> Identificado</label>
         </div>
         {modo === "identificado" ? (
-          <div className="grade-campos duas">
-            <label className="campo"><span>Nome da paciente</span>
+          <div className="features-grid">
+            <label className="field">
+              <span className="field-label">Nome da paciente</span>
               <input value={paciente.nome} onChange={(e) => setPaciente({ ...paciente, nome: e.target.value })} maxLength={200} />
             </label>
-            <label className="campo"><span>Prontuário</span>
+            <label className="field">
+              <span className="field-label">Prontuário</span>
               <input value={paciente.prontuario} onChange={(e) => setPaciente({ ...paciente, prontuario: e.target.value })} maxLength={100} />
             </label>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Alert tone="warning" title="Sem criptografia">
+                No nome e no prontuário informados, os dados são gravados em texto no banco de dados,
+                sem criptografia. Não use esta ferramenta fora de um ambiente controlado.
+              </Alert>
+            </div>
           </div>
         ) : (
-          <p className="ajuda">Nenhum dado da paciente é armazenado; apenas as características e o resultado.</p>
+          <p className="card-help">Nenhum dado da paciente é armazenado; apenas as características e o resultado.</p>
         )}
-        <button type="submit" disabled={enviando || !pacienteOk}>{enviando ? "Classificando…" : "Classificar tumor"}</button>
-        {tocados && Object.keys(tocados).length > 0 && invalidos > 0 && (
-          <p className="erro" role="alert">{invalidos} campo(s) precisam de correção.</p>
+        <button type="submit" className="btn" disabled={enviando || !pacienteOk}>
+          {enviando ? "Classificando…" : "Classificar tumor"}
+        </button>
+        {Object.keys(tocados).length > 0 && invalidos > 0 && (
+          <p className="field-error" role="alert" style={{ marginTop: "var(--space-3)" }}>
+            {invalidos} campo(s) precisam de correção.
+          </p>
         )}
       </section>
 
       {erro && (
-        <section className="cartao erro" role="alert">
-          <h2>Não foi possível classificar</h2>
-          <p>{erro.message}</p>
-          {erro.codigo === "MODEL_UNAVAILABLE" && <p>Seus dados foram mantidos; tente novamente em instantes.</p>}
-          {erro.detalhes.campos_fora_da_faixa && (
-            <ul>{erro.detalhes.campos_fora_da_faixa.map((c) => <li key={c.campo}>{c.campo}: {c.valor}</li>)}</ul>
-          )}
+        <section className="card">
+          <Alert tone="error" title="Não foi possível classificar">
+            <p className="mb-0">{erro.message}</p>
+            {erro.code === "MODEL_UNAVAILABLE" && <p className="mb-0">Seus dados foram mantidos; tente novamente em instantes.</p>}
+            {erro.code === "TIMEOUT" && <p className="mb-0">Seus dados foram mantidos; tente novamente.</p>}
+            {erro.details?.campos_fora_da_faixa && (
+              <ul>{erro.details.campos_fora_da_faixa.map((c) => <li key={c.campo}>{c.campo}: {c.valor}</li>)}</ul>
+            )}
+          </Alert>
         </section>
       )}
 
       {resultado && (
-        <section className={`cartao resultado ${resultado.classificacao}`} tabIndex={-1} ref={resultadoRef} aria-live="polite">
+        <section
+          className={`card result-panel ${resultado.label === "maligno" ? "result-malignant" : "result-benign"}`}
+          tabIndex={-1}
+          ref={resultadoRef}
+          aria-live="polite"
+        >
           <h2>Resultado</h2>
-          <p className="veredito">Classificação: <strong>{resultado.classificacao === "maligno" ? "Maligno" : "Benigno"}</strong></p>
-          <dl>
-            <div><dt>Grau de confiança</dt><dd>{pct(resultado.confianca)} <span className={`faixa ${resultado.faixa_confianca}`}>confiança {resultado.faixa_confianca === "media" ? "média" : resultado.faixa_confianca}</span></dd></div>
-            <div><dt>Probabilidade de malignidade</dt><dd>{pct(resultado.probabilidade_maligno)}</dd></div>
-            <div><dt>Modelo</dt><dd>{nomeModelo(resultado.modelo_utilizado)} (limiar {resultado.limiar_utilizado.toFixed(2)})</dd></div>
-            <div><dt>Tempo de resposta</dt><dd>{resultado.tempo_ms.toFixed(0)} ms</dd></div>
-            <div><dt>Registro</dt><dd>#{resultado.avaliacao_id} ({resultado.identificado ? "identificado" : "anônimo"})</dd></div>
+          <p className="result-verdict">
+            Classificação:
+            <ResultBadge
+              kind={resultado.label === "maligno" ? "malignant" : "benign"}
+              label={resultado.label === "maligno" ? "Maligno" : "Benigno"}
+            />
+          </p>
+          <dl className="definition-list">
+            <div>
+              <dt>Grau de confiança</dt>
+              <dd>
+                {pct(resultado.confidence)}
+                <span className="confidence-tag">confiança {rotuloFaixaConfianca(resultado.confidence_band)}</span>
+              </dd>
+            </div>
+            <div><dt>Probabilidade de malignidade</dt><dd>{pct(resultado.probability)}</dd></div>
+            <div><dt>Modelo</dt><dd>{nomeModelo(resultado.model_name)} (limiar {resultado.threshold_used.toFixed(2)})</dd></div>
+            <div><dt>Tempo de resposta</dt><dd>{Math.round(resultado.elapsed_ms)} ms</dd></div>
+            <div><dt>Registro</dt><dd>#{resultado.evaluation_id} ({modo === "identificado" ? "identificado" : "anônimo"})</dd></div>
           </dl>
-          {resultado.acionou_limiar_seguranca && (
-            <p className="nota">
+          {resultado.safety_threshold_triggered && (
+            <p className="card-help">
               Classificado como maligno pelo limiar de segurança (abaixo de 50%), adotado para reduzir
               falsos negativos. Recomenda-se atenção especial a este caso.
             </p>
           )}
-          <p className="nota">{resultado.aviso}</p>
+          <p className="card-help mb-0">{resultado.disclaimer}</p>
         </section>
       )}
     </form>

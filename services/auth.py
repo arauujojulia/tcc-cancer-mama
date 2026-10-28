@@ -1,74 +1,84 @@
 """
-Autenticação por cookie de sessão (assinado pelo Flask, HttpOnly).
+Cadastro e login (D4).
 
-O cookie guarda só o id do usuário. A cada requisição o usuário é relido do banco,
-então desativar uma conta (ativo=false) vale na hora. O papel (RBAC) também vem
-do banco, nunca do cliente.
+Sessão de servidor em cookie assinado (`flask.session`), sem JWT, sem controle
+de acesso por perfil e sem registro de auditoria. A senha nunca é gravada em
+texto: este é o único módulo que escreve `users.password_hash`, sempre com
+`werkzeug.security` e com o algoritmo **fixado** em `pbkdf2:sha256`
+(`METODO_HASH`), para o código corresponder ao que D4 documenta em vez de seguir
+o padrão da versão instalada do Werkzeug (hoje scrypt).
 """
-from functools import wraps
+from flask import session
+from sqlalchemy.exc import IntegrityError
+from werkzeug.security import check_password_hash, generate_password_hash
 
-from flask import g, jsonify, session
+from db.models import User, db
+from services.validation import ErroValidacao
 
-from db.models import Papel, Usuario, db
+CHAVE_SESSAO = "user_id"
 
-CHAVE_SESSAO = "usuario_id"
-
-# Hash de uma senha qualquer: usado para gastar o mesmo tempo quando o e-mail não
-# existe, para o login não revelar se a conta existe.
-_HASH_FALSO = Usuario(nome="", email="", papel=Papel.MEDICO)
-_HASH_FALSO.definir_senha("senha-falsa-apenas-para-igualar-o-tempo")
+# D4: algoritmo explícito, não o padrão da biblioteca. `check_password_hash`
+# identifica o algoritmo pelo prefixo do hash armazenado, então contas antigas
+# gravadas com o padrão anterior (scrypt) continuam autenticando.
+METODO_HASH = "pbkdf2:sha256"
 
 
-def autenticar(email: str, senha: str) -> Usuario | None:
-    """Devolve o usuário se e-mail e senha conferem e a conta está ativa."""
-    usuario = Usuario.query.filter_by(email=(email or "").strip().lower()).first()
-    if usuario is None:
-        _HASH_FALSO.senha_confere(senha or "")
+def register(name: str, email: str, password: str, profile: str) -> User:
+    """
+    Cria o usuário e abre a sessão. E-mail duplicado vira erro de validação
+    (checado antes do insert e, em corrida perdida, pelo IntegrityError).
+    """
+    if User.query.filter_by(email=email).first() is not None:
+        raise ErroValidacao("E-mail já cadastrado.")
+
+    user = User(
+        name=name,
+        email=email,
+        password_hash=generate_password_hash(password, method=METODO_HASH),
+        profile=profile,
+    )
+    db.session.add(user)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        raise ErroValidacao("E-mail já cadastrado.") from None
+
+    abrir_sessao(user)
+    return user
+
+
+def authenticate(email: str, password: str) -> User | None:
+    """Usuário correspondente ou None. Não revela qual campo falhou."""
+    user = User.query.filter_by(email=email).first()
+    if user is None or not check_password_hash(user.password_hash, password):
         return None
-    if not usuario.senha_confere(senha or "") or not usuario.ativo:
-        return None
-    return usuario
+    abrir_sessao(user)
+    return user
 
 
-def iniciar_sessao(usuario: Usuario):
+def abrir_sessao(user: User) -> None:
     session.clear()
-    session[CHAVE_SESSAO] = usuario.id
-    session.permanent = True  # dura PERMANENT_SESSION_LIFETIME (8h)
+    session[CHAVE_SESSAO] = user.id
 
 
-def encerrar_sessao():
+def encerrar_sessao() -> None:
     session.clear()
 
 
-def usuario_atual() -> Usuario | None:
-    usuario_id = session.get(CHAVE_SESSAO)
-    if usuario_id is None:
+def current_user() -> User | None:
+    """Usuário da sessão, ou None se não houver sessão válida."""
+    user_id = session.get(CHAVE_SESSAO)
+    if user_id is None:
         return None
-    usuario = db.session.get(Usuario, usuario_id)
-    if usuario is None or not usuario.ativo:
+    user = db.session.get(User, user_id)
+    if user is None:
+        # Sessão apontando para usuário removido: descarta.
         session.clear()
-        return None
-    return usuario
+    return user
 
 
-def _erro(mensagem, status, codigo):
-    return jsonify({"erro": mensagem, "codigo": codigo}), status
-
-
-def exigir_login(*papeis: Papel):
-    """Protege a rota. Sem papéis: qualquer usuário autenticado; com papéis: só eles."""
-
-    def decorador(f):
-        @wraps(f)
-        def interno(*args, **kwargs):
-            usuario = usuario_atual()
-            if usuario is None:
-                return _erro("Autenticação necessária.", 401, "NAO_AUTENTICADO")
-            if papeis and usuario.papel not in papeis:
-                return _erro("Seu perfil não tem acesso a este recurso.", 403, "SEM_PERMISSAO")
-            g.usuario = usuario
-            return f(*args, **kwargs)
-
-        return interno
-
-    return decorador
+def current_user_id() -> int | None:
+    """Id do usuário da sessão, para associar autoria à avaliação (pode ser None)."""
+    user = current_user()
+    return user.id if user else None

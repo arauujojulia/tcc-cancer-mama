@@ -1,116 +1,108 @@
-import unittest
+"""
+Testes de integração: autenticação simples (D3, D4).
+"""
+from werkzeug.security import generate_password_hash
 
-from app import create_app
-from db.models import Avaliacao, Usuario, db
-from ml.data import FEATURE_COLUMNS
-from services.usuarios import criar_usuario
-
-SENHA = "senha-forte-1"
-# Primeira linha da base WDBC (842302)
-LINHA = [17.99, 10.38, 122.8, 1001, 0.1184, 0.2776, 0.3001, 0.1471, 0.2419, 0.07871, 1.095, 0.9053, 8.589, 153.4,
-         0.006399, 0.04904, 0.05373, 0.01587, 0.03003, 0.006193, 25.38, 17.33, 184.6, 2019, 0.1622, 0.6656, 0.7119,
-         0.2654, 0.4601, 0.1189]
+from db.models import User, db
+from services.auth import METODO_HASH
+from tests.base import ApiTestCase
 
 
-class AuthTest(unittest.TestCase):
-    def setUp(self):
-        # SQLite em memória: nunca toca o banco de desenvolvimento.
-        self.app = create_app({"TESTING": True, "SECRET_KEY": "teste", "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
-        self.ctx = self.app.app_context()
-        self.ctx.push()
-        self.medico = criar_usuario(nome="Ana", email="ana@exemplo.com", senha=SENHA, papel="medico")
-        self.pesq = criar_usuario(nome="Bia", email="bia@exemplo.com", senha=SENHA, papel="pesquisador")
-        self.c = self.app.test_client()
+class TestAuth(ApiTestCase):
+    def test_register_cria_usuario_e_devolve_201(self):
+        resp = self.client.post("/api/v1/auth/register", json={
+            "name": "Dra. Fulana", "email": "fulana@exemplo.com",
+            "password": "senha1234", "profile": "medico",
+        })
+        self.assertEqual(resp.status_code, 201)
+        corpo = resp.get_json()
+        self.assertEqual(corpo["user"]["email"], "fulana@exemplo.com")
+        self.assertEqual(corpo["user"]["profile"], "medico")
+        self.assertNotIn("password_hash", corpo["user"])
 
-    def tearDown(self):
-        db.session.remove()
-        self.ctx.pop()
+    def test_register_email_duplicado_devolve_400(self):
+        self.registrar_e_logar(email="dup@exemplo.com")
+        resp = self.client.post("/api/v1/auth/register", json={
+            "name": "Outra Pessoa", "email": "dup@exemplo.com",
+            "password": "outrasenha", "profile": "pesquisador",
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.get_json()["code"], "VALIDATION_ERROR")
 
-    def login(self, email, senha=SENHA, client=None):
-        return (client or self.c).post("/api/auth/login", json={"email": email, "senha": senha})
+    def test_login_com_credenciais_corretas_devolve_200(self):
+        self.client.post("/api/v1/auth/logout")
+        self.registrar_e_logar(email="login@exemplo.com")
+        self.client.post("/api/v1/auth/logout")
+        resp = self.client.post("/api/v1/auth/login", json={
+            "email": "login@exemplo.com", "password": "senha1234",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json()["user"]["email"], "login@exemplo.com")
 
-    # ---------- registro e login ----------
-    def test_registro_aberto_aos_dois_papeis(self):
-        for papel in ("medico", "pesquisador"):
-            r = self.c.post("/api/auth/registrar", json={
-                "nome": "Novo", "email": f"{papel}@novo.com", "senha": SENHA, "papel": papel})
-            self.assertEqual(r.status_code, 201)
-            self.assertEqual(r.json["papel"], papel)
-            self.assertNotIn("senha_hash", r.json)
+    def test_login_com_senha_errada_devolve_401_generico(self):
+        self.registrar_e_logar(email="senha@exemplo.com")
+        resp = self.client.post("/api/v1/auth/login", json={
+            "email": "senha@exemplo.com", "password": "errada123",
+        })
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.get_json()["code"], "UNAUTHENTICATED")
 
-    def test_registro_email_duplicado_e_dados_invalidos(self):
-        base = {"nome": "X", "email": "ana@exemplo.com", "senha": SENHA, "papel": "medico"}
-        self.assertEqual(self.c.post("/api/auth/registrar", json=base).status_code, 409)
-        self.assertEqual(self.c.post("/api/auth/registrar", json={**base, "email": "n@n.com", "senha": "curta"}).status_code, 400)
-        self.assertEqual(self.c.post("/api/auth/registrar", json={**base, "email": "n@n.com", "papel": "admin"}).status_code, 400)
+    def test_login_com_email_inexistente_devolve_401_generico(self):
+        resp = self.client.post("/api/v1/auth/login", json={
+            "email": "nao-existe@exemplo.com", "password": "qualquercoisa",
+        })
+        self.assertEqual(resp.status_code, 401)
 
-    def test_login_define_cookie_httponly_samesite(self):
-        r = self.login("ana@exemplo.com")
-        self.assertEqual(r.status_code, 200)
-        cookie = r.headers["Set-Cookie"]
-        self.assertIn("HttpOnly", cookie)
-        self.assertIn("SameSite=Lax", cookie)
-        self.assertEqual(self.c.get("/api/auth/me").json["email"], "ana@exemplo.com")
+    def test_me_sem_sessao_devolve_401(self):
+        resp = self.client.get("/api/v1/auth/me")
+        self.assertEqual(resp.status_code, 401)
 
-    def test_login_invalido_tem_mensagem_unica(self):
-        a = self.login("ana@exemplo.com", "errada")
-        b = self.login("naoexiste@exemplo.com")
-        self.assertEqual(a.status_code, 401)
-        self.assertEqual(a.json, b.json)
+    def test_me_com_sessao_devolve_200(self):
+        self.registrar_e_logar(email="me@exemplo.com")
+        resp = self.client.get("/api/v1/auth/me")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json()["user"]["email"], "me@exemplo.com")
 
-    def test_conta_inativa_nao_entra_e_cai_na_hora(self):
-        self.login("ana@exemplo.com")
-        self.medico.ativo = False
+    def test_hash_gravado_usa_pbkdf2_sha256_como_d4_documenta(self):
+        """
+        D4 fixa o algoritmo: o hash não pode depender do padrão da versão do
+        Werkzeug instalada (que hoje seria scrypt).
+        """
+        self.assertEqual(METODO_HASH, "pbkdf2:sha256")
+        self.registrar_e_logar(email="hash@exemplo.com")
+        user = User.query.filter_by(email="hash@exemplo.com").first()
+        self.assertTrue(user.password_hash.startswith("pbkdf2:sha256:"))
+        self.assertNotIn("senha1234", user.password_hash)
+
+    def test_login_de_conta_antiga_com_hash_scrypt_continua_funcionando(self):
+        """
+        Os usuários do banco de demonstração foram gravados com o padrão
+        anterior (`scrypt:32768:8:1$`). `check_password_hash` escolhe o
+        algoritmo pelo prefixo do hash armazenado, então fixar pbkdf2 no
+        cadastro não invalida essas contas.
+        """
+        antigo = generate_password_hash("demo12345", method="scrypt")
+        self.assertTrue(antigo.startswith("scrypt:"))
+        db.session.add(User(
+            name="Conta Antiga", email="antiga@exemplo.com",
+            password_hash=antigo, profile="medico",
+        ))
         db.session.commit()
-        self.assertEqual(self.c.get("/api/auth/me").status_code, 401)
-        self.assertEqual(self.login("ana@exemplo.com").status_code, 401)
 
-    def test_logout_encerra_a_sessao(self):
-        self.login("ana@exemplo.com")
-        self.assertEqual(self.c.post("/api/auth/logout", json={}).status_code, 200)
-        self.assertEqual(self.c.get("/api/auth/me").status_code, 401)
+        resp = self.client.post("/api/v1/auth/login", json={
+            "email": "antiga@exemplo.com", "password": "demo12345",
+        })
+        self.assertEqual(resp.status_code, 200, resp.get_json())
+        self.assertEqual(resp.get_json()["user"]["email"], "antiga@exemplo.com")
 
-    # ---------- proteção das rotas ----------
-    def test_sem_login_todas_as_rotas_dao_401(self):
-        for rota in ("/api/auth/me", "/api/features/schema", "/api/avaliacoes", "/api/avaliacoes/1",
-                     "/api/metricas", "/api/metricas/features", "/api/metricas/export", "/api/modelos"):
-            self.assertEqual(self.c.get(rota).status_code, 401, rota)
-        r = self.c.post("/api/biopsias/classificar", json={})
-        self.assertEqual((r.status_code, r.json["codigo"]), (401, "NAO_AUTENTICADO"))
-
-    def test_medico_nao_acessa_area_do_pesquisador(self):
-        self.login("ana@exemplo.com")
-        for rota in ("/api/metricas", "/api/metricas/features", "/api/metricas/export", "/api/modelos"):
-            r = self.c.get(rota)
-            self.assertEqual((r.status_code, r.json["codigo"]), (403, "SEM_PERMISSAO"), rota)
-        self.assertEqual(self.c.get("/api/avaliacoes").status_code, 200)
-
-    def test_pesquisador_nao_classifica(self):
-        self.login("bia@exemplo.com")
-        r = self.c.post("/api/biopsias/classificar", json={"caracteristicas": dict(zip(FEATURE_COLUMNS, LINHA))})
-        self.assertEqual(r.status_code, 403)
-        self.assertEqual(self.c.get("/api/modelos").status_code, 200)
-        self.assertEqual(self.c.get("/api/avaliacoes").status_code, 200)
-
-    def test_classificacao_usa_o_medico_da_sessao(self):
-        self.login("ana@exemplo.com")
-        r = self.c.post("/api/biopsias/classificar", json={
-            "caracteristicas": dict(zip(FEATURE_COLUMNS, LINHA)), "medico_id": self.pesq.id})
-        self.assertEqual(r.status_code, 200, r.json)
-        self.assertEqual(db.session.get(Avaliacao, r.json["avaliacao_id"]).medico_id, self.medico.id)
-
-    # ---------- CSRF ----------
-    def test_escrita_exige_json(self):
-        r = self.c.post("/api/auth/login", data="email=ana@exemplo.com&senha=x",
-                        content_type="application/x-www-form-urlencoded")
-        self.assertEqual((r.status_code, r.json["codigo"]), (415, "CONTENT_TYPE_INVALIDO"))
-
-    def test_usuario_inexistente_na_sessao_e_descartado(self):
-        self.login("ana@exemplo.com")
-        db.session.delete(self.medico)
-        db.session.commit()
-        self.assertEqual(self.c.get("/api/auth/me").status_code, 401)
+    def test_logout_encerra_sessao(self):
+        self.registrar_e_logar(email="logout@exemplo.com")
+        resp = self.client.post("/api/v1/auth/logout")
+        self.assertEqual(resp.status_code, 204)
+        resp_me = self.client.get("/api/v1/auth/me")
+        self.assertEqual(resp_me.status_code, 401)
 
 
 if __name__ == "__main__":
+    import unittest
     unittest.main()

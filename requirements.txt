@@ -1,7 +1,7 @@
 flask
 flask-cors
 flask-sqlalchemy
-pyodbc
+psycopg
 scikit-learn
 pandas
 numpy

@@ -1,91 +1,113 @@
-import React, { useEffect, useState } from "react";
-import AuthPage from "./pages/AuthPage.jsx";
+import React from "react";
+import { Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
+import { AlertTriangleIcon } from "./components/icons.jsx";
+import { logout as apiLogout } from "./api.js";
+import { useSession } from "./SessionContext.jsx";
+import LoginPage from "./pages/LoginPage.jsx";
 import ClassificarPage from "./pages/ClassificarPage.jsx";
 import HistoricoPage from "./pages/HistoricoPage.jsx";
 import ModelosPage from "./pages/ModelosPage.jsx";
-import { getUsuarioAtual, sair as sairApi } from "./api.js";
-import { PERFIS } from "./perfis.js";
 
-const abaInicial = (s) => (s ? PERFIS[s.papel].abas[0][0] : null);
+// Menu por perfil (D3): guarda de UI, não de autorização — digitar a URL de
+// outra tela carrega normalmente, sem trava nenhuma no servidor nem aqui.
+const ITENS_MENU = {
+  medico: [
+    ["/classificar", "Classificar"],
+    ["/historico", "Histórico"],
+  ],
+  pesquisador: [
+    ["/laboratorio", "Laboratório de modelos"],
+    ["/historico", "Histórico"],
+  ],
+};
+
+function RotaProtegida({ children }) {
+  const { user, loading } = useSession();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
 
 export default function App() {
-  // A sessão vive no cookie HttpOnly do servidor; aqui só guardamos o usuário que ele devolve.
-  const [sessao, setSessao] = useState(null);
-  const [aba, setAba] = useState(null);
-  const [verificando, setVerificando] = useState(true);
+  return (
+    <div className="app-shell">
+      {/* RNF01: aviso permanente, visível em todas as telas, não só no resultado. */}
+      <div className="disclaimer-bar" role="note">
+        <AlertTriangleIcon className="icon" style={{ width: 16, height: 16, verticalAlign: "-3px" }} />
+        <strong>Ferramenta de apoio à decisão.</strong> Não substitui o laudo histopatológico nem a avaliação médica.
+      </div>
 
-  useEffect(() => {
-    getUsuarioAtual()
-      .then((u) => {
-        setSessao(u);
-        setAba(abaInicial(u));
-      })
-      .catch(() => {})
-      .finally(() => setVerificando(false));
-    const expirou = () => {
-      setSessao(null);
-      setAba(null);
-    };
-    window.addEventListener("sessao-expirada", expirou);
-    return () => window.removeEventListener("sessao-expirada", expirou);
-  }, []);
+      <AppHeader />
 
-  const entrar = (usuario) => {
-    setSessao(usuario);
-    setAba(abaInicial(usuario));
-  };
+      <main className="app-main">
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/classificar" element={<RotaProtegida><ClassificarPage /></RotaProtegida>} />
+          <Route path="/historico" element={<RotaProtegida><HistoricoPage /></RotaProtegida>} />
+          <Route path="/laboratorio" element={<RotaProtegida><ModelosPage /></RotaProtegida>} />
+          <Route path="/" element={<RedirecionarInicial />} />
+          <Route path="*" element={<RedirecionarInicial />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
+
+function RedirecionarInicial() {
+  const { user, loading } = useSession();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  const primeira = ITENS_MENU[user.profile]?.[0]?.[0] || "/historico";
+  return <Navigate to={primeira} replace />;
+}
+
+function AppHeader() {
+  const { user, setUser, loading } = useSession();
+  const navigate = useNavigate();
+  const itens = user ? ITENS_MENU[user.profile] || [] : [];
 
   const sair = async () => {
     try {
-      await sairApi();
-    } catch {
-      /* mesmo sem resposta, volta para o login */
+      await apiLogout();
+    } finally {
+      setUser(null);
+      navigate("/login");
     }
-    setSessao(null);
-    setAba(null);
   };
 
   return (
-    <>
-      {/* RNF01: aviso permanente, sempre visível, em qualquer tela */}
-      <div className="aviso-permanente" role="note">
-        <strong>Ferramenta de apoio à decisão.</strong> A classificação não substitui o laudo
-        histopatológico nem a avaliação médica.
-      </div>
+    <header className="app-header">
+      <div className="app-header-inner">
+        <div className="app-brand">
+          <h1>Triagem de câncer de mama</h1>
+          <span className="tag">WDBC · apoio à decisão</span>
+        </div>
 
-      <header className="topo">
-        <h1>Triagem de risco de câncer de mama</h1>
-        {sessao && (
-          <div className="perfil">
-            <span>{PERFIS[sessao.papel].rotulo} · {sessao.nome}</span>
-            <button type="button" className="secundario" onClick={sair}>Sair</button>
-          </div>
-        )}
-      </header>
-
-      {verificando ? (
-        <main><p className="ajuda">Carregando…</p></main>
-      ) : !sessao ? (
-        <main>
-          <AuthPage onEntrar={entrar} />
-        </main>
-      ) : (
-        <>
-          <nav className="abas" aria-label="Seções">
-            {PERFIS[sessao.papel].abas.map(([id, rotulo]) => (
-              <button key={id} className={aba === id ? "ativa" : ""} aria-current={aba === id ? "page" : undefined} onClick={() => setAba(id)}>
+        {!loading && user && (
+          <nav className="app-nav" aria-label="Seções do sistema">
+            {itens.map(([caminho, rotulo]) => (
+              <NavLink key={caminho} to={caminho} className={({ isActive }) => (isActive ? "active" : "")}>
                 {rotulo}
-              </button>
+              </NavLink>
             ))}
           </nav>
+        )}
 
-          <main>
-            {aba === "classificar" && <ClassificarPage />}
-            {aba === "historico" && <HistoricoPage />}
-            {aba === "modelos" && <ModelosPage />}
-          </main>
-        </>
-      )}
-    </>
+        {!loading && (
+          <div className="app-session">
+            {user ? (
+              <>
+                <span className="who">
+                  Olá, <strong>{user.name}</strong> ({user.profile === "medico" ? "médico" : "pesquisador"})
+                </span>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={sair}>Sair</button>
+              </>
+            ) : (
+              <span className="who">Não autenticado</span>
+            )}
+          </div>
+        )}
+      </div>
+    </header>
   );
 }

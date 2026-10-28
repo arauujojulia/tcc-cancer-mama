@@ -2,6 +2,7 @@
   "test_size": 0.2,
   "random_state": 42,
   "cv_folds": 5,
+  "grid_search": true,
   "n_features": 30,
   "feature_names": [
     "mean_radius",
@@ -47,7 +48,7 @@
   },
   "hiperparametros": {
     "regressao_logistica": {
-      "C": 1.0,
+      "C": 1,
       "class_weight": null,
       "dual": false,
       "fit_intercept": true,
@@ -55,7 +56,7 @@
       "l1_ratio": 0.0,
       "max_iter": 1000,
       "n_jobs": null,
-      "penalty": "deprecated",
+      "penalty": "l2",
       "random_state": 42,
       "solver": "lbfgs",
       "tol": 0.0001,
@@ -63,7 +64,7 @@
       "warm_start": false
     },
     "svm": {
-      "C": 1.0,
+      "C": 10,
       "break_ties": false,
       "cache_size": 200,
       "class_weight": null,
@@ -82,15 +83,15 @@
   },
   "hashes_sha256": {
     "scaler": "d2424258e192318c836645d1aec012cedc9da934124537181ca3ebd3e2c23838",
-    "regressao_logistica": "acc2cbc5fd81d2c69a359797ce4188fb38dad29a8bdfa024114d86591d17f5b1",
-    "svm": "0ea4aeaf541c4d91a60dd9da60095e25da22647bbb53d1a738dee09ed26ad7ea",
-    "dataset": "d606af411f3e5be8a317a5a8b652b425aaf0ff38ca683d5327ffff94c3695f4a"
+    "regressao_logistica": "9ec517d16ebfb6d1c7bfe8d41dd3f49e67a7598840fa617fd0f5af84ce74fff1",
+    "svm": "8bfca2197929c444b7288de2d4062db179cd712ded9ccb6062675c379b575f8f",
+    "dataset": "11218503215d46bf9eb4e9bcf7da97b878f0cdae46c75863d00e5009ab91a76c"
   },
   "versoes": {
-    "python": "3.14.5",
+    "python": "3.14.6",
     "scikit_learn": "1.9.1",
-    "numpy": "2.5.3",
+    "numpy": "2.5.0",
     "joblib": "1.6.0"
   },
-  "commit_git": "fe3051a753c365073b6b773b2b61dd3535306481"
+  "commit_git": "096bc54787318a90f40840bd51644a43b6dd4bab"
 }
