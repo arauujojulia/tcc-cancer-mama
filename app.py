@@ -1,26 +1,27 @@
 """
 Aplicação Flask.
 
-Sprint 0 (HT03): perfis de médico e pesquisador, tabela Usuario (db/models.py).
-Sprint 1: endpoint de classificação (api/routes.py).
-Sprint 2: persistência das avaliações e registro dos modelos treinados.
-Sprint 3: API REST completa + servir o frontend React (frontend/dist).
+Expõe a API REST em /api/v1 (api/routes.py), persiste usuários, avaliações e
+modelos treinados (db/models.py) e serve o frontend React compilado
+(frontend/dist).
 
 Configuração por variáveis de ambiente (ou arquivo .env, ver .env.example):
-  SECRET_KEY               chave que assina o cookie de sessão (obrigatória em produção;
-                           sem ela, uma chave temporária é gerada e as sessões caem a cada reinício)
-  SESSION_COOKIE_SECURE    "true" para enviar o cookie só por HTTPS (use em produção)
-  CORS_ORIGINS             origens permitidas, separadas por vírgula (padrão: http://localhost:5173)
-  DATABASE_URL             SQL Server (mssql+pyodbc), ver .env.example
-                           (padrão: SQL Server Express local, autenticação do Windows)
+  DATABASE_URL           ex.: postgresql+psycopg://usuario:senha@localhost:5432/tcc_cancer_mama
+                         (se ausente: SQLite local, só para desenvolvimento)
+  CORS_ORIGINS           origens do frontend separadas por vírgula; precisa ser
+                         a lista explícita, pois o cookie de sessão viaja com
+                         credenciais (padrão: http://localhost:5173)
+  SECRET_KEY             assinatura do cookie de sessão (sem ela, uma chave
+                         temporária é gerada em memória e um aviso é logado)
+  SESSION_COOKIE_SECURE  true para restringir o cookie a HTTPS (padrão: false)
 """
 import os
 import secrets
-from datetime import timedelta
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 from api.routes import api_bp
 from db.models import db
@@ -28,37 +29,81 @@ from services.modelos import sincronizar_modelos
 
 load_dotenv()
 
-DATABASE_URL_PADRAO = (
-    r"mssql+pyodbc://@localhost\SQLEXPRESS/tcc_cancer_mama"
-    "?driver=ODBC+Driver+18+for+SQL+Server&Trusted_Connection=yes&TrustServerCertificate=yes"
-)
-
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+CORS_ORIGINS_PADRAO = "http://localhost:5173"
+
+
+def _origens_cors():
+    """
+    Lista explícita de origens. Com `supports_credentials`, o navegador recusa
+    a origem curinga, então '*' não é aceito aqui.
+    """
+    bruto = os.environ.get("CORS_ORIGINS") or CORS_ORIGINS_PADRAO
+    origens = [o.strip() for o in bruto.split(",") if o.strip() and o.strip() != "*"]
+    return origens or [CORS_ORIGINS_PADRAO]
+
+
+def _booleano(nome, padrao=False):
+    bruto = os.environ.get(nome)
+    if bruto is None or bruto == "":
+        return padrao
+    return bruto.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _erro_app(mensagem, code, status):
+    """Mesmo envelope de erro da API, para não haver duas convenções no serviço."""
+    return jsonify({"error": mensagem, "code": code}), status
 
 
 def create_app(config=None):
     app = Flask(__name__, static_folder=None)
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", DATABASE_URL_PADRAO)
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///tcc_cancer_mama.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
     chave = os.environ.get("SECRET_KEY")
     if not chave:
         chave = secrets.token_hex(32)
-        app.logger.warning("SECRET_KEY não definida: usando chave temporária (as sessões caem ao reiniciar).")
+        app.logger.warning(
+            "SECRET_KEY não configurada: usando chave temporária em memória. "
+            "As sessões caem a cada reinício; defina SECRET_KEY no .env."
+        )
     app.config["SECRET_KEY"] = chave
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "false").lower() == "true"
-    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
+    app.config["SESSION_COOKIE_SECURE"] = _booleano("SESSION_COOKIE_SECURE", False)
+
     if config:
         app.config.update(config)
 
     db.init_app(app)
-    # Com cookie, a origem precisa ser explícita (nunca "*").
-    origens = [o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
-    CORS(app, resources={r"/api/*": {"origins": origens}}, supports_credentials=True)
+    CORS(app, resources={r"/api/*": {"origins": _origens_cors()}}, supports_credentials=True)
     app.register_blueprint(api_bp)
+
+    def _tratar_erro_interno(e):
+        """
+        Falha inesperada → 500 `INTERNAL_ERROR` no mesmo envelope das demais
+        (contrato do README e da especificação consolidada). O stack trace vai
+        para o log do servidor (`logger.exception`) e **não** para a resposta:
+        o corpo devolvido traz só a mensagem genérica e o código.
+        """
+        app.logger.exception("INTERNAL_ERROR: falha não tratada em %s", request.path)
+        return _erro_app(
+            "Erro interno do servidor. Tente novamente ou contate o suporte técnico.",
+            "INTERNAL_ERROR", 500,
+        )
+
+    @app.errorhandler(Exception)
+    def _tratar_excecao(e):
+        # Os erros HTTP (404, 405, …) continuam com o tratamento próprio: este
+        # handler cobre apenas exceção não tratada, que antes virava HTML.
+        if isinstance(e, HTTPException):
+            return e
+        return _tratar_erro_interno(e)
+
+    # `abort(500)` levanta InternalServerError, que é HTTPException e passaria
+    # pelo guarda acima; por isso o código 500 tem registro próprio.
+    app.register_error_handler(500, _tratar_erro_interno)
 
     @app.route("/health")
     def health():
@@ -69,16 +114,17 @@ def create_app(config=None):
     @app.route("/<path:caminho>")
     def frontend(caminho):
         if caminho == "api" or caminho.startswith("api/"):
-            return jsonify({"erro": "Rota não encontrada.", "codigo": "ROTA_NAO_ENCONTRADA"}), 404
+            return _erro_app("Rota não encontrada.", "NOT_FOUND", 404)
         if not os.path.isdir(FRONTEND_DIST):
-            return jsonify({"erro": "Frontend não compilado. Rode 'npm run build' em frontend/.",
-                            "codigo": "FRONTEND_AUSENTE"}), 404
+            return _erro_app(
+                "Frontend não compilado. Rode 'npm run build' em frontend/.", "NOT_FOUND", 404
+            )
         if caminho and os.path.isfile(os.path.join(FRONTEND_DIST, caminho)):
             return send_from_directory(FRONTEND_DIST, caminho)
         return send_from_directory(FRONTEND_DIST, "index.html")
 
     with app.app_context():
-        db.create_all()  # usuarios, modelos_treinados, avaliacoes
+        db.create_all()  # users, evaluations, trained_models, training_runs
         if not app.config.get("TESTING"):
             sincronizar_modelos()
 

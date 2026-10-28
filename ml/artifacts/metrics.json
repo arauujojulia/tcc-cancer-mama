@@ -1,5 +1,5 @@
 {
-  "gerado_em": "2026-10-04T16:09:37.641611+00:00",
+  "gerado_em": "2026-10-14T20:25:56.084610+00:00",
   "classe_positiva": "maligno",
   "meta_sensibilidade": 0.97,
   "melhor_modelo": "regressao_logistica",
@@ -84,35 +84,35 @@
     },
     "svm": {
       "limiar_padrao": 0.5,
-      "limiar_seguranca": 0.42,
+      "limiar_seguranca": 0.38,
       "limiar_atingiu_meta_no_treino": true,
       "teste_padrao": {
-        "acuracia": 0.9649122807017544,
-        "sensibilidade": 0.9523809523809523,
-        "especificidade": 0.9722222222222222,
-        "auc": 0.9947089947089947,
-        "taxa_falsos_negativos": 0.047619047619047616,
+        "acuracia": 0.9736842105263158,
+        "sensibilidade": 0.9285714285714286,
+        "especificidade": 1.0,
+        "auc": 0.9927248677248677,
+        "taxa_falsos_negativos": 0.07142857142857142,
         "matriz_confusao": {
-          "vn": 70,
-          "fp": 2,
-          "fn": 2,
-          "vp": 40
+          "vn": 72,
+          "fp": 0,
+          "fn": 3,
+          "vp": 39
         }
       },
       "teste_operacao": {
         "acuracia": 0.9736842105263158,
-        "sensibilidade": 0.9761904761904762,
-        "especificidade": 0.9722222222222222,
-        "auc": 0.9947089947089947,
-        "taxa_falsos_negativos": 0.023809523809523808,
+        "sensibilidade": 0.9523809523809523,
+        "especificidade": 0.9861111111111112,
+        "auc": 0.9927248677248677,
+        "taxa_falsos_negativos": 0.047619047619047616,
         "matriz_confusao": {
-          "vn": 70,
-          "fp": 2,
-          "fn": 1,
-          "vp": 41
+          "vn": 71,
+          "fp": 1,
+          "fn": 2,
+          "vp": 40
         }
       },
-      "atende_meta_sensibilidade_teste": true,
+      "atende_meta_sensibilidade_teste": false,
       "validacao_cruzada": {
         "acuracia": {
           "media": 0.9758241758241759,
@@ -143,10 +143,10 @@
           0.0,
           0.01389,
           0.01389,
-          0.02778,
-          0.02778,
-          0.18056,
-          0.18056,
+          0.04167,
+          0.04167,
+          0.25,
+          0.25,
           1.0
         ],
         "tpr": [

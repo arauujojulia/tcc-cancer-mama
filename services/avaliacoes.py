@@ -1,79 +1,65 @@
 """
 Registro e consulta do histórico de avaliações (US07 / UC07).
+
+Os dados de paciente do modo identificado são gravados em texto puro: não há
+criptografia na aplicação e ela não deve ser exposta fora de ambiente
+controlado.
 """
-from sqlalchemy.orm import joinedload
-
-from db.models import Avaliacao, Papel, Usuario, db
-from services.modelos import modelo_registrado_mais_recente
+from db.models import Evaluation, db
 
 
-def registrar(*, caracteristicas: dict, resultado: dict, tempo_ms: float,
-              identificado: bool, nome: str | None, prontuario: str | None,
-              medico_id: int | None) -> Avaliacao:
-    """Grava a avaliação em uma única transação."""
-    modelo = modelo_registrado_mais_recente(resultado["modelo_utilizado"])
-    av = Avaliacao(
-        medico_id=medico_id,
-        modelo_id=modelo.id if modelo else None,
-        caracteristicas=caracteristicas,
-        classificacao=resultado["classificacao"],
-        probabilidade_maligno=resultado["probabilidade_maligno"],
-        confianca=resultado["confianca"],
-        faixa_confianca=resultado["faixa_confianca"],
-        limiar_utilizado=resultado["limiar_utilizado"],
-        tempo_resposta_ms=round(tempo_ms, 2),
-        identificado=identificado,
-        paciente_nome=nome,
-        paciente_prontuario=prontuario,
+def registrar(*, features: dict, resultado: dict, tempo_ms: float,
+              mode: str, patient_name: str | None, patient_record: str | None,
+              user_id: int | None) -> Evaluation:
+    """Grava a avaliação em uma única transação, já com o resultado da inferência."""
+    av = Evaluation(
+        user_id=user_id,
+        features=features,
+        label=resultado["classificacao"],
+        probability=resultado["probabilidade_maligno"],
+        confidence=resultado["confianca"],
+        confidence_band=resultado["faixa_confianca"],
+        model_name=resultado["modelo_utilizado"],
+        threshold_used=resultado["limiar_utilizado"],
+        mode=mode,
+        patient_name=patient_name,
+        patient_record=patient_record,
+        elapsed_ms=round(tempo_ms),
     )
     db.session.add(av)
     db.session.commit()
     return av
 
 
-def medico_existe(medico_id: int) -> bool:
-    u = db.session.get(Usuario, medico_id)
-    return u is not None and u.ativo and u.papel is Papel.MEDICO
-
-
-def paciente_dados(av: Avaliacao):
-    """Dados do paciente para exibição, ou None se o registro é anônimo."""
-    if not av.identificado:
-        return None
-    return {"nome": av.paciente_nome, "prontuario": av.paciente_prontuario}
-
-
 def listar(filtros: dict) -> dict:
-    q = Avaliacao.query.options(joinedload(Avaliacao.modelo))
-    if filtros["classificacao"]:
-        q = q.filter(Avaliacao.classificacao == filtros["classificacao"])
-    if filtros["identificado"] is not None:
-        q = q.filter(Avaliacao.identificado.is_(filtros["identificado"]))
-    if filtros["inicio"]:
-        q = q.filter(Avaliacao.criado_em >= filtros["inicio"])
-    if filtros["fim_exclusivo"]:
-        q = q.filter(Avaliacao.criado_em < filtros["fim_exclusivo"])
-    if filtros["confianca_min"] is not None:
-        q = q.filter(Avaliacao.confianca >= filtros["confianca_min"])
-    if filtros["confianca_max"] is not None:
-        q = q.filter(Avaliacao.confianca <= filtros["confianca_max"])
+    """Envelope paginado {items, page, limit, total}, mais recentes primeiro."""
+    q = Evaluation.query
+    if filtros["label"]:
+        q = q.filter(Evaluation.label == filtros["label"])
+    if filtros["mode"]:
+        q = q.filter(Evaluation.mode == filtros["mode"])
+    if filtros["date_from"]:
+        q = q.filter(Evaluation.created_at >= filtros["date_from"])
+    if filtros["date_to_exclusive"]:
+        q = q.filter(Evaluation.created_at < filtros["date_to_exclusive"])
+    if filtros["confidence_min"] is not None:
+        q = q.filter(Evaluation.confidence >= filtros["confidence_min"])
+    if filtros["confidence_max"] is not None:
+        q = q.filter(Evaluation.confidence <= filtros["confidence_max"])
 
-    q = q.order_by(Avaliacao.criado_em.desc(), Avaliacao.id.desc())
+    q = q.order_by(Evaluation.created_at.desc(), Evaluation.id.desc())
     total = q.count()
-    limite, pagina = filtros["limite"], filtros["pagina"]
-    itens = q.offset((pagina - 1) * limite).limit(limite).all()
+    limit, page = filtros["limit"], filtros["page"]
+    itens = q.offset((page - 1) * limit).limit(limit).all()
 
     return {
-        "itens": [a.to_dict(paciente=paciente_dados(a)) for a in itens],
-        "paginacao": {
-            "pagina": pagina,
-            "limite": limite,
-            "total": total,
-            "paginas": max(1, -(-total // limite)),
-        },
+        "items": [a.to_dict() for a in itens],
+        "page": page,
+        "limit": limit,
+        "total": total,
     }
 
 
-def obter(avaliacao_id: int):
-    av = db.session.get(Avaliacao, avaliacao_id)
-    return None if av is None else av.to_dict(paciente=paciente_dados(av))
+def obter(evaluation_id: int):
+    av = db.session.get(Evaluation, evaluation_id)
+    return None if av is None else av.to_dict()
