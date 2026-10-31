@@ -38,10 +38,13 @@ respondem 401 `UNAUTHENTICATED`; só `/auth/*` e `/health` são públicas.
 
 **Criptografia dos dados da paciente.** No modo de registro **identificado**, o
 nome e o prontuário são cifrados em repouso com **AES-256-GCM** (nonce aleatório
-de 12 bytes por valor, dado associado por campo e prefixo de versão `enc:v1:`).
+de 12 bytes por valor, dado associado por campo e por linha e prefixo de versão
+`enc:v2:`). Valor adulterado, copiado de outra linha ou em texto puro nunca é
+exibido: a API devolve `null` e registra a falha no log.
 A chave vem da variável de ambiente `PATIENT_DATA_KEY` (32 bytes em base64);
-sem ela, o modo identificado é recusado com erro. Para cifrar registros que já
-estavam em texto puro: `python -m services.crypto --migrar`.
+sem ela, o modo identificado é recusado com 503 `ENCRYPTION_UNAVAILABLE`, antes de
+classificar ou gravar, e um aviso é registrado ao subir. Para cifrar registros que já
+estavam em texto puro ou em `enc:v1:`: `python -m services.crypto --migrar`.
 
 **Limitações conhecidas.** Não há JWT nem trilha de auditoria de acesso. O
 perfil é escolhido pelo próprio usuário no cadastro aberto (`POST
@@ -131,7 +134,8 @@ joblib, python-dotenv, matplotlib. Python 3.14.)
 
 ### 2. Variáveis de ambiente
 
-Copie `.env.example` para `.env`:
+Copie `.env.example` para `.env` e gere as suas próprias chaves (`SECRET_KEY` e
+`PATIENT_DATA_KEY` vêm vazias, com o comando de geração no próprio arquivo):
 
 | Variável | Função |
 |---|---|
@@ -239,8 +243,8 @@ Identificadores (rotas, campos, códigos de erro) em inglês; mensagens ao usuá
 em português. Envelope de erro sempre `{"error": "...", "code": "..."}`.
 Códigos: `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403),
 `NOT_FOUND` (404),
-`MODEL_UNAVAILABLE` (503), `TIMEOUT` (504), `SENSITIVITY_BELOW_TARGET` (400),
-`INTERNAL_ERROR` (500).
+`MODEL_UNAVAILABLE` (503), `ENCRYPTION_UNAVAILABLE` (503), `TIMEOUT` (504),
+`SENSITIVITY_BELOW_TARGET` (400), `INTERNAL_ERROR` (500).
 
 A coluna **Sessão** indica se a rota exige cookie de sessão válido. Sem sessão,
 as rotas marcadas respondem 401 `UNAUTHENTICATED`. Com sessão, o perfil também

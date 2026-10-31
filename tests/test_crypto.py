@@ -17,7 +17,7 @@ from unittest.mock import patch
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from services.crypto import (
-    encrypt, decrypt, _get_key, migrar_dados_existentes,
+    ad_linha, encrypt, decrypt, _get_key, migrar_dados_existentes,
     _ENCRYPT_PREFIX, _AD_EVAL_NAME, _AD_EVAL_RECORD,
 )
 from db.models import db
@@ -90,12 +90,16 @@ class TestEncryptDecrypt(unittest.TestCase):
         with self.assertRaises(Exception):
             decrypt(ct, _AD_EVAL_RECORD)
 
-    def test_decrypt_texto_puro_retorna_inalterado(self):
-        """Um valor sem o prefixo de versão (texto puro legado) é retornado como está."""
-        self.assertEqual(decrypt("texto puro", _AD_EVAL_NAME), "texto puro")
+    def test_associated_data_impede_troca_entre_linhas(self):
+        ct = encrypt("Fulana", ad_linha(_AD_EVAL_NAME, 1))
+        with self.assertRaises(Exception):
+            decrypt(ct, ad_linha(_AD_EVAL_NAME, 2))
 
-    def test_decrypt_vazio_retorna_vazio(self):
-        self.assertEqual(decrypt("", _AD_EVAL_NAME), "")
+    def test_decrypt_recusa_valor_sem_prefixo(self):
+        """Texto puro no banco não pode passar pela autenticação do GCM."""
+        for valor in ("texto puro", ""):
+            with self.assertRaises(ValueError):
+                decrypt(valor, _AD_EVAL_NAME)
 
 
 class TestMigracao(ApiTestCase):
@@ -103,7 +107,7 @@ class TestMigracao(ApiTestCase):
 
     def setUp(self):
         super().setUp()
-        # Cria uma avaliação com texto puro simulado (bypass do TypeDecorator).
+        # Cria uma avaliação com texto puro simulado (gravação direta na tabela).
         from sqlalchemy import text
         from db.models import Evaluation
         # Injeta diretamente no banco, simulando dados antigos.
@@ -129,6 +133,18 @@ class TestMigracao(ApiTestCase):
         self.assertTrue(row[1].startswith(_ENCRYPT_PREFIX))
         self.assertNotIn("Nome Antigo", row[0])
         self.assertNotIn("REC-001", row[1])
+        self.assertEqual(decrypt(row[0], ad_linha(_AD_EVAL_NAME, 1)), "Nome Antigo")
+
+    def test_migracao_converte_formato_v1(self):
+        from sqlalchemy import text
+        v1 = "enc:v1:" + encrypt("Nome V1", _AD_EVAL_NAME)[len(_ENCRYPT_PREFIX):]
+        db.session.execute(text("UPDATE evaluations SET patient_name = :v WHERE id = 1"), {"v": v1})
+        db.session.commit()
+        migrar_dados_existentes()
+        cifrado = db.session.execute(text(
+            "SELECT patient_name FROM evaluations WHERE id = 1"
+        )).scalar()
+        self.assertEqual(decrypt(cifrado, ad_linha(_AD_EVAL_NAME, 1)), "Nome V1")
 
     def test_migracao_idempotente(self):
         """Rodar migração duas vezes não quebra nem duplica cifragem."""

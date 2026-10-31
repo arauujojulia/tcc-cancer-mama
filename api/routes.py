@@ -32,6 +32,7 @@ from ml.train import (
 )
 from services import auth as svc_auth
 from services import avaliacoes as svc_avaliacoes
+from services import crypto as svc_crypto
 from services import modelos as svc_modelos
 from services.validation import (
     ErroValidacao,
@@ -195,6 +196,14 @@ def criar_predicao():
     identificado, patient_name, patient_record = validar_paciente(
         mode, payload.get("patient_name"), payload.get("patient_record")
     )
+    if identificado and not svc_crypto.chave_disponivel():
+        # Recusa antes de classificar: dado de paciente nunca é gravado sem cifra.
+        current_app.logger.error("ENCRYPTION_UNAVAILABLE: PATIENT_DATA_KEY ausente ou inválida.")
+        return _erro(
+            "Criptografia indisponível: o modo identificado não pode ser usado. "
+            "Contate o suporte técnico.",
+            503, "ENCRYPTION_UNAVAILABLE",
+        )
 
     resultado = predict(features)  # levanta ModeloIndisponivel → 503
     tempo_ms = (time.perf_counter() - inicio) * 1000

@@ -19,8 +19,8 @@ Tipos escolhidos para funcionar igual em PostgreSQL e SQLite: `db.JSON`,
 `db.DateTime(timezone=True)` e defaults no nível Python (nunca `server_default`
 com SQL de dialeto).
 
-Os campos `patient_name` e `patient_record` de `evaluations` são cifrados com
-AES-256-GCM via `EncryptedText` (services/crypto.py). A chave é lida de
+Os campos `patient_name` e `patient_record` de `evaluations` guardam o valor
+cifrado com AES-256-GCM (services/crypto.py). A chave é lida de
 `PATIENT_DATA_KEY` no ambiente.
 """
 
@@ -30,14 +30,6 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import event
 
 db = SQLAlchemy()
-
-# Criptografia: toda a lógica vive em services/crypto.py para evitar duplicação.
-from services.crypto import (
-    EncryptedText,
-    _ENCRYPT_PREFIX,
-    _AD_EVAL_NAME,
-    _AD_EVAL_RECORD,
-)
 
 
 def _agora():
@@ -81,9 +73,9 @@ class Evaluation(db.Model):
     rastreabilidade dos casos exige que o histórico não seja reescrito.
 
     No modo identificado, `patient_name` e `patient_record` são cifrados com
-    AES-256-GCM (TypeDecorator `EncryptedText`). A chave é lida de
-    `PATIENT_DATA_KEY` no ambiente. O médico vê os dados em claro; o pesquisador
-    recebe `null` (minimização de dados).
+    AES-256-GCM em `services/avaliacoes.py`, que grava e lê esses campos. A chave
+    é lida de `PATIENT_DATA_KEY` no ambiente. O médico vê os dados em claro; o
+    pesquisador recebe `null` (minimização de dados).
     """
 
     __tablename__ = "evaluations"
@@ -101,9 +93,9 @@ class Evaluation(db.Model):
     model_name = db.Column(db.String(60), nullable=False)
     threshold_used = db.Column(db.Float, nullable=False)
     mode = db.Column(db.String(15), nullable=False)            # anonimo | identificado
-    # Cifrados com AES-256-GCM via TypeDecorator; em Python, o valor é str | None.
-    patient_name = db.Column(EncryptedText(_AD_EVAL_NAME), nullable=True)
-    patient_record = db.Column(EncryptedText(_AD_EVAL_RECORD), nullable=True)
+    # Valor cifrado (enc:v2:...), nunca o texto em claro.
+    patient_name = db.Column(db.Text, nullable=True)
+    patient_record = db.Column(db.Text, nullable=True)
     elapsed_ms = db.Column(db.Integer, nullable=False)         # RNF02
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_agora)
 
@@ -127,8 +119,8 @@ class Evaluation(db.Model):
             "model_name": self.model_name,
             "threshold_used": self.threshold_used,
             "mode": self.mode,
-            "patient_name": self.patient_name,
-            "patient_record": self.patient_record,
+            "patient_name": None,    # preenchidos em services/avaliacoes.py,
+            "patient_record": None,  # conforme o perfil de quem lê
             "elapsed_ms": self.elapsed_ms,
             "features": self.features,
             "created_at": _iso(self.created_at),

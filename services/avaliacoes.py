@@ -2,21 +2,39 @@
 Registro e consulta do histórico de avaliações (US07 / UC07).
 
 Os dados de paciente do modo identificado são cifrados com AES-256-GCM
-(TypeDecorator `EncryptedText` em db/models.py). O médico vê os dados em claro;
-o pesquisador recebe `null` (minimização de dados — LGPD).
+(services/crypto.py). O médico vê os dados em claro; o pesquisador recebe `null`
+(minimização de dados — LGPD).
 """
+from cryptography.exceptions import InvalidTag
+from flask import current_app
+from sqlalchemy import update
+
 from db.models import Evaluation, db
+from services import crypto
+
+
+def _decifrar(av: Evaluation, valor: str | None, campo: bytes) -> str | None:
+    """Valor ilegível vira `null` e vai para o log: uma linha não derruba o histórico."""
+    if valor is None:
+        return None
+    try:
+        return crypto.decrypt(valor, crypto.ad_linha(campo, av.id))
+    except (InvalidTag, ValueError, RuntimeError) as e:
+        current_app.logger.error(
+            "Avaliação %s: %s ilegível (%s).", av.id, campo.decode(), type(e).__name__
+        )
+        return None
 
 
 def _av_dict(av: Evaluation, profile: str | None) -> dict:
     """
-    Converte uma avaliação em dict, ocultando dados identificáveis para
-    pesquisadores (minimização de dados). O médico vê em claro.
+    Converte uma avaliação em dict. Só o médico recebe os dados identificáveis;
+    para o pesquisador nem são decifrados (minimização de dados).
     """
     d = av.to_dict()
-    if profile != "medico":
-        d["patient_name"] = None
-        d["patient_record"] = None
+    if profile == "medico":
+        d["patient_name"] = _decifrar(av, av.patient_name, crypto._AD_EVAL_NAME)
+        d["patient_record"] = _decifrar(av, av.patient_record, crypto._AD_EVAL_RECORD)
     return d
 
 
@@ -34,11 +52,15 @@ def registrar(*, features: dict, resultado: dict, tempo_ms: float,
         model_name=resultado["modelo_utilizado"],
         threshold_used=resultado["limiar_utilizado"],
         mode=mode,
-        patient_name=patient_name,
-        patient_record=patient_record,
         elapsed_ms=round(tempo_ms),
     )
     db.session.add(av)
+    if mode == "identificado":
+        db.session.flush()  # o id da linha entra no dado associado da cifra
+        db.session.execute(update(Evaluation).where(Evaluation.id == av.id).values(
+            patient_name=crypto.encrypt(patient_name, crypto.ad_linha(crypto._AD_EVAL_NAME, av.id)),
+            patient_record=crypto.encrypt(patient_record, crypto.ad_linha(crypto._AD_EVAL_RECORD, av.id)),
+        ))
     db.session.commit()
     return av
 
