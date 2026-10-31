@@ -188,9 +188,9 @@ export default function ClassificarPage() {
               <input value={paciente.prontuario} onChange={(e) => setPaciente({ ...paciente, prontuario: e.target.value })} maxLength={100} />
             </label>
             <div style={{ gridColumn: "1 / -1" }}>
-              <Alert tone="warning" title="Sem criptografia">
-                No nome e no prontuário informados, os dados são gravados em texto no banco de dados,
-                sem criptografia. Não use esta ferramenta fora de um ambiente controlado.
+              <Alert tone="info" title="Dados cifrados">
+                No nome e no prontuário informados, os dados são gravados cifrados (AES-256-GCM) no banco de dados.
+                Mesmo assim, não use esta ferramenta fora de um ambiente controlado.
               </Alert>
             </div>
           </div>
