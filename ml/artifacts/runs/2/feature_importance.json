@@ -1,0 +1,159 @@
+{
+  "metodo": "permutação (aumento médio da log-loss no conjunto de teste)",
+  "repeticoes": 30,
+  "melhor_modelo": "regressao_logistica",
+  "modelos": {
+    "regressao_logistica": [
+      {
+        "caracteristica": "worst_texture",
+        "importancia": 0.071911680529765,
+        "desvio": 0.02477830235944085
+      },
+      {
+        "caracteristica": "worst_symmetry",
+        "importancia": 0.06705025302422923,
+        "desvio": 0.013636548972271146
+      },
+      {
+        "caracteristica": "worst_concavity",
+        "importancia": 0.05659485550295443,
+        "desvio": 0.010098526962940363
+      },
+      {
+        "caracteristica": "worst_concave_points",
+        "importancia": 0.03046805915859091,
+        "desvio": 0.008348018168079325
+      },
+      {
+        "caracteristica": "mean_concave_points",
+        "importancia": 0.028600181278455605,
+        "desvio": 0.01256850783579112
+      },
+      {
+        "caracteristica": "mean_concavity",
+        "importancia": 0.027984101752980953,
+        "desvio": 0.00891071620567181
+      },
+      {
+        "caracteristica": "worst_radius",
+        "importancia": 0.018149720628637053,
+        "desvio": 0.012718360531997357
+      },
+      {
+        "caracteristica": "worst_smoothness",
+        "importancia": 0.014073343046873521,
+        "desvio": 0.005005346374111148
+      },
+      {
+        "caracteristica": "worst_area",
+        "importancia": 0.013946626852414941,
+        "desvio": 0.011410580700690317
+      },
+      {
+        "caracteristica": "worst_perimeter",
+        "importancia": 0.013792212750145635,
+        "desvio": 0.010035394578041543
+      },
+      {
+        "caracteristica": "se_radius",
+        "importancia": 0.011990233465277281,
+        "desvio": 0.013115534850518949
+      },
+      {
+        "caracteristica": "se_texture",
+        "importancia": 0.010451571614940666,
+        "desvio": 0.0056860826032218885
+      },
+      {
+        "caracteristica": "se_concave_points",
+        "importancia": 0.007875310103066451,
+        "desvio": 0.006131872397036315
+      },
+      {
+        "caracteristica": "mean_smoothness",
+        "importancia": 0.007100129810168404,
+        "desvio": 0.004981227371294807
+      },
+      {
+        "caracteristica": "mean_perimeter",
+        "importancia": 0.004422413981407767,
+        "desvio": 0.004838368694252743
+      },
+      {
+        "caracteristica": "se_area",
+        "importancia": 0.004195233284892266,
+        "desvio": 0.007861523502621892
+      },
+      {
+        "caracteristica": "mean_radius",
+        "importancia": 0.0041940058610295166,
+        "desvio": 0.004973005505452781
+      },
+      {
+        "caracteristica": "mean_area",
+        "importancia": 0.004084766305457934,
+        "desvio": 0.00560044006195492
+      },
+      {
+        "caracteristica": "se_perimeter",
+        "importancia": 0.0031045719164993295,
+        "desvio": 0.007688015296691688
+      },
+      {
+        "caracteristica": "worst_fractal_dimension",
+        "importancia": 0.0026442647421792954,
+        "desvio": 0.000531646745931474
+      },
+      {
+        "caracteristica": "se_smoothness",
+        "importancia": 0.0012027780474129978,
+        "desvio": 0.0034032800604216775
+      },
+      {
+        "caracteristica": "se_symmetry",
+        "importancia": 0.0006292780261265489,
+        "desvio": 0.004143706691895571
+      },
+      {
+        "caracteristica": "mean_texture",
+        "importancia": 0.0004677834699812198,
+        "desvio": 0.0065763914104920215
+      },
+      {
+        "caracteristica": "mean_fractal_dimension",
+        "importancia": -0.0011563815061153674,
+        "desvio": 0.0008733610400853504
+      },
+      {
+        "caracteristica": "se_compactness",
+        "importancia": -0.001252102112686077,
+        "desvio": 0.011506826097045428
+      },
+      {
+        "caracteristica": "se_concavity",
+        "importancia": -0.0018747649252364676,
+        "desvio": 0.0007293113119190033
+      },
+      {
+        "caracteristica": "mean_symmetry",
+        "importancia": -0.002869549152291093,
+        "desvio": 0.0021797995616410987
+      },
+      {
+        "caracteristica": "se_fractal_dimension",
+        "importancia": -0.003400400722935828,
+        "desvio": 0.007567559559466383
+      },
+      {
+        "caracteristica": "worst_compactness",
+        "importancia": -0.0069006657877998204,
+        "desvio": 0.0017137051661469654
+      },
+      {
+        "caracteristica": "mean_compactness",
+        "importancia": -0.007170297960263607,
+        "desvio": 0.00434995310379865
+      }
+    ]
+  }
+}

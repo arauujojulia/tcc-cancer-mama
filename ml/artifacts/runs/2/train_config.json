@@ -1,0 +1,79 @@
+{
+  "test_size": 0.2,
+  "random_state": 42,
+  "cv_folds": 5,
+  "grid_search": false,
+  "n_features": 30,
+  "feature_names": [
+    "mean_radius",
+    "mean_texture",
+    "mean_perimeter",
+    "mean_area",
+    "mean_smoothness",
+    "mean_compactness",
+    "mean_concavity",
+    "mean_concave_points",
+    "mean_symmetry",
+    "mean_fractal_dimension",
+    "se_radius",
+    "se_texture",
+    "se_perimeter",
+    "se_area",
+    "se_smoothness",
+    "se_compactness",
+    "se_concavity",
+    "se_concave_points",
+    "se_symmetry",
+    "se_fractal_dimension",
+    "worst_radius",
+    "worst_texture",
+    "worst_perimeter",
+    "worst_area",
+    "worst_smoothness",
+    "worst_compactness",
+    "worst_concavity",
+    "worst_concave_points",
+    "worst_symmetry",
+    "worst_fractal_dimension"
+  ],
+  "n_treino": 455,
+  "n_teste": 114,
+  "distribuicao_treino": {
+    "benigno": 285,
+    "maligno": 170
+  },
+  "distribuicao_teste": {
+    "benigno": 72,
+    "maligno": 42
+  },
+  "hiperparametros": {
+    "regressao_logistica": {
+      "C": 1.0,
+      "class_weight": null,
+      "dual": false,
+      "fit_intercept": true,
+      "intercept_scaling": 1,
+      "l1_ratio": 0.0,
+      "max_iter": 1000,
+      "n_jobs": null,
+      "penalty": "deprecated",
+      "random_state": 42,
+      "solver": "lbfgs",
+      "tol": 0.0001,
+      "verbose": 0,
+      "warm_start": false
+    }
+  },
+  "hashes_sha256": {
+    "scaler": "d2424258e192318c836645d1aec012cedc9da934124537181ca3ebd3e2c23838",
+    "regressao_logistica": "acc2cbc5fd81d2c69a359797ce4188fb38dad29a8bdfa024114d86591d17f5b1",
+    "dataset": "11218503215d46bf9eb4e9bcf7da97b878f0cdae46c75863d00e5009ab91a76c"
+  },
+  "versoes": {
+    "python": "3.14.5",
+    "scikit_learn": "1.9.1",
+    "numpy": "2.5.3",
+    "joblib": "1.6.0"
+  },
+  "commit_git": "af8f4e92f8ff32a1750d1c44cabd5c0990294d59"
+}
