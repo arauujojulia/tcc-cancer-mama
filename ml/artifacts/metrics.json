@@ -3,7 +3,7 @@
   "classe_positiva": "maligno",
   "meta_sensibilidade": 0.97,
   "melhor_modelo": "regressao_logistica",
-  "criterio_melhor_modelo": "Maior sensibilidade no ponto de operação (limiar de segurança); desempate por AUC e depois por especificidade.",
+  "criterio_melhor_modelo": "Maior sensibilidade out-of-fold do treino no limiar de segurança; desempate por AUC out-of-fold e depois por especificidade out-of-fold. O conjunto de teste não participa da seleção.",
   "modelos": {
     "regressao_logistica": {
       "limiar_padrao": 0.5,

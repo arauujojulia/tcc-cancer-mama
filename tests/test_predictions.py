@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from db.models import Evaluation, db
 from ml.predict import ModeloIndisponivel
-from tests.base import ApiAutenticadoTestCase
+from tests.base import ApiAutenticadoTestCase, ApiTestCase
 
 
 def _payload_valido(mode="anonimo", patient_name=None, patient_record=None):
@@ -24,7 +24,13 @@ def _payload_valido(mode="anonimo", patient_name=None, patient_record=None):
     }
 
 
-class TestPredictions(ApiAutenticadoTestCase):
+class TestPredictions(ApiTestCase):
+    """Testes de POST/GET /predictions usam perfil médico (único autorizado)."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = self.registrar_e_logar(email="medico@exemplo.com", profile="medico")
+
     def test_post_predictions_200_grava_evaluation_com_campos_em_ingles(self):
         resp = self.client.post("/api/v1/predictions", json=_payload_valido())
         self.assertEqual(resp.status_code, 200, resp.get_json())
@@ -41,15 +47,38 @@ class TestPredictions(ApiAutenticadoTestCase):
         # Sessão obrigatória (D10) ⇒ a autoria passa a ser sempre registrada.
         self.assertEqual(av.user_id, self.user["id"])
 
-    def test_modo_identificado_grava_patient_name_e_record_em_texto(self):
+    def test_modo_identificado_grava_patient_name_e_record_cifrados(self):
+        """No modo identificado, nome/prontuário são cifrados no banco e descriptografados ao ler."""
         resp = self.client.post("/api/v1/predictions", json=_payload_valido(
             mode="identificado", patient_name="Fulana de Tal", patient_record="PRT-0042",
         ))
         self.assertEqual(resp.status_code, 200, resp.get_json())
         av = db.session.get(Evaluation, resp.get_json()["evaluation_id"])
         self.assertEqual(av.mode, "identificado")
-        self.assertEqual(av.patient_name, "Fulana de Tal")  # texto puro, sem cifra
+        # TypeDecorator descriptografa transparentemente
+        self.assertEqual(av.patient_name, "Fulana de Tal")
         self.assertEqual(av.patient_record, "PRT-0042")
+
+    def test_dados_cifrados_nao_aparecem_em_claro_no_banco(self):
+        """Lendo a coluna crua, o valor começa com o prefixo de versão e não contém o texto em claro."""
+        from sqlalchemy import text
+        self.client.post("/api/v1/predictions", json=_payload_valido(
+            mode="identificado", patient_name="Fulana de Tal", patient_record="PRT-0042",
+        ))
+        rows = db.session.execute(text(
+            "SELECT patient_name, patient_record FROM evaluations WHERE patient_name IS NOT NULL"
+        )).fetchall()
+        self.assertTrue(len(rows) > 0)
+        for row in rows:
+            name_raw, record_raw = row
+            if name_raw is not None:
+                self.assertTrue(name_raw.startswith("enc:v1:"),
+                                f"Valor cru não cifrado: {name_raw[:30]}")
+                self.assertNotIn("Fulana", name_raw)
+            if record_raw is not None:
+                self.assertTrue(record_raw.startswith("enc:v1:"),
+                                f"Valor cru não cifrado: {record_raw[:30]}")
+                self.assertNotIn("PRT-0042", record_raw)
 
     def test_rnf02_elapsed_ms_presente_e_abaixo_de_2000_no_caminho_feliz(self):
         resp = self.client.post("/api/v1/predictions", json=_payload_valido())

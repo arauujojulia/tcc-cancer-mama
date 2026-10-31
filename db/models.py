@@ -2,7 +2,8 @@
 Modelo de dados.
 
 Quatro tabelas: `users` (médico ou pesquisador, perfil declarado no cadastro,
-sem trava de autorização), `evaluations` (histórico imutável de classificações),
+com autorização por perfil no servidor), `evaluations` (histórico imutável de
+classificações, com criptografia AES-256-GCM nos dados do paciente),
 `trained_models` (classificadores treinados, com métricas e ponto de operação) e
 `training_runs` (cada disparo de treino, para reprodutibilidade).
 
@@ -17,6 +18,10 @@ comentários e as mensagens, em português.
 Tipos escolhidos para funcionar igual em PostgreSQL e SQLite: `db.JSON`,
 `db.DateTime(timezone=True)` e defaults no nível Python (nunca `server_default`
 com SQL de dialeto).
+
+Os campos `patient_name` e `patient_record` de `evaluations` são cifrados com
+AES-256-GCM via `EncryptedText` (services/crypto.py). A chave é lida de
+`PATIENT_DATA_KEY` no ambiente.
 """
 
 from datetime import datetime, timezone
@@ -25,6 +30,14 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import event
 
 db = SQLAlchemy()
+
+# Criptografia: toda a lógica vive em services/crypto.py para evitar duplicação.
+from services.crypto import (
+    EncryptedText,
+    _ENCRYPT_PREFIX,
+    _AD_EVAL_NAME,
+    _AD_EVAL_RECORD,
+)
 
 
 def _agora():
@@ -37,8 +50,9 @@ def _iso(valor):
 
 class User(db.Model):
     """
-    Usuário da ferramenta. `profile` é apenas declarado no cadastro e serve
-    para o frontend escolher o menu — não há controle de acesso por perfil.
+    Usuário da ferramenta. `profile` é declarado no cadastro e usado no servidor
+    para autorização por perfil (médico não acessa rotas de pesquisador e vice-versa).
+    A atribuição de perfil ainda não é restrita no cadastro aberto.
     """
 
     __tablename__ = "users"
@@ -66,8 +80,10 @@ class Evaluation(db.Model):
     Registro de uma classificação (UC07). Imutável após gravado: a
     rastreabilidade dos casos exige que o histórico não seja reescrito.
 
-    No modo identificado, `patient_name` e `patient_record` são gravados em
-    TEXTO PURO — a ferramenta não deve ser exposta fora de ambiente controlado.
+    No modo identificado, `patient_name` e `patient_record` são cifrados com
+    AES-256-GCM (TypeDecorator `EncryptedText`). A chave é lida de
+    `PATIENT_DATA_KEY` no ambiente. O médico vê os dados em claro; o pesquisador
+    recebe `null` (minimização de dados).
     """
 
     __tablename__ = "evaluations"
@@ -85,8 +101,9 @@ class Evaluation(db.Model):
     model_name = db.Column(db.String(60), nullable=False)
     threshold_used = db.Column(db.Float, nullable=False)
     mode = db.Column(db.String(15), nullable=False)            # anonimo | identificado
-    patient_name = db.Column(db.Text, nullable=True)
-    patient_record = db.Column(db.Text, nullable=True)
+    # Cifrados com AES-256-GCM via TypeDecorator; em Python, o valor é str | None.
+    patient_name = db.Column(EncryptedText(_AD_EVAL_NAME), nullable=True)
+    patient_record = db.Column(EncryptedText(_AD_EVAL_RECORD), nullable=True)
     elapsed_ms = db.Column(db.Integer, nullable=False)         # RNF02
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=_agora)
 

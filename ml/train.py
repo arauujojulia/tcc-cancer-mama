@@ -85,8 +85,9 @@ PARAM_GRIDS = {
 }
 
 CRITERIO_MELHOR_MODELO = (
-    "Maior sensibilidade no ponto de operação (limiar de segurança); "
-    "desempate por AUC e depois por especificidade."
+    "Maior sensibilidade out-of-fold do treino no limiar de segurança; "
+    "desempate por AUC out-of-fold e depois por especificidade out-of-fold. "
+    "O conjunto de teste não participa da seleção."
 )
 
 
@@ -187,15 +188,30 @@ def _commit_git():
         return None
 
 
-def _selecionar_melhor(resultados):
-    return max(
-        resultados,
-        key=lambda n: (
-            round(resultados[n]["teste_operacao"]["sensibilidade"], 12),
-            round(resultados[n]["teste_operacao"]["auc"], 12),
-            round(resultados[n]["teste_operacao"]["especificidade"], 12),
-        ),
-    )
+def _selecionar_melhor(resultados, oof_por_modelo):
+    """
+    Escolhe o melhor modelo usando **apenas** predições out-of-fold do treino
+    (sem dados de teste — D11). Para cada modelo, no seu limiar de segurança:
+    1. maior sensibilidade OOF;
+    2. desempate por maior AUC OOF;
+    3. desempate por maior especificidade OOF.
+
+    `oof_por_modelo` é um dict {nome: {"y_true": [...], "proba": [...], "limiar": float}}.
+    """
+    def _chave_oof(nome):
+        oof = oof_por_modelo[nome]
+        yt = np.array(oof["y_true"])
+        pr = np.array(oof["proba"])
+        limiar = oof["limiar"]
+        yp = (pr >= limiar).astype(int)
+        m = compute_metrics(yt, yp, pr)
+        return (
+            round(m["sensibilidade"], 12),
+            round(m["auc"], 12),
+            round(m["especificidade"], 12),
+        )
+
+    return max(resultados, key=_chave_oof)
 
 
 def _oof_proba(modelo, X_train, y_train, cv):
@@ -305,6 +321,7 @@ def train_and_evaluate(output_dir=ARTIFACTS_DIR, models=None, test_size=TEST_SIZ
 
     resultados, importancias, hashes = {}, {}, {"scaler": sha256_arquivo(scaler_path)}
     hiperparametros_persistidos = {}
+    oof_por_modelo = {}  # {nome: {"y_true": [...], "proba": [...], "limiar": float}}
     for nome, modelo_base in modelos_selecionados.items():
         # 1) validação cruzada estratificada no treino (com os hiperparâmetros padrão,
         #    para o relatório de estabilidade do modelo-base continuar comparável)
@@ -326,6 +343,12 @@ def train_and_evaluate(output_dir=ARTIFACTS_DIR, models=None, test_size=TEST_SIZ
             "y_true": y_train.tolist(),
             "proba": oof.tolist(),
         })
+        # Armazena para seleção do melhor modelo (apenas dados de treino — D11).
+        oof_por_modelo[nome] = {
+            "y_true": y_train.tolist(),
+            "proba": oof.tolist(),
+            "limiar": limiar,
+        }
 
         # 4) avaliação no teste (nunca usado para escolher o limiar) — `modelo`
         #    já foi ajustado em X_train_scaled dentro de _ajustar_modelo. O vetor
@@ -371,7 +394,7 @@ def train_and_evaluate(output_dir=ARTIFACTS_DIR, models=None, test_size=TEST_SIZ
         joblib.dump(modelo, caminho)
         hashes[nome] = sha256_arquivo(caminho)
 
-    melhor = _selecionar_melhor(resultados)
+    melhor = _selecionar_melhor(resultados, oof_por_modelo)
 
     metrics = {
         "gerado_em": datetime.now(timezone.utc).isoformat(),

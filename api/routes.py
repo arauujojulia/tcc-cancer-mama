@@ -5,9 +5,9 @@ Os identificadores (rotas, campos e códigos de erro) são em inglês; as
 mensagens devolvidas ao usuário, em português. O envelope de erro é sempre
 {"error", "code"}.
 
-Toda rota de dados exige sessão válida (401 `UNAUTHENTICATED` sem ela);
-`/auth/*` é pública. Nenhuma rota é bloqueada por perfil (D3): o `profile` só
-escolhe o menu do frontend.
+Toda rota de dados exige sessão válida (401 `UNAUTHENTICATED` sem ela) e
+autorização por perfil (403 `FORBIDDEN` se o perfil não tem permissão).
+`/auth/*` e `/health` são públicos.
 
 Artefatos: `ml/artifacts/` é a referência versionada do artigo (RNF03),
 regerada apenas por `python -m ml.train`; o treino sob demanda desta API grava
@@ -69,14 +69,8 @@ def _erro(mensagem, status, code, **extra):
 
 def exigir_sessao(view):
     """
-    Exige sessão válida na rota (D10): sem ela, 401 `UNAUTHENTICATED`, no mesmo
+    Exige sessão válida na rota: sem ela, 401 `UNAUTHENTICATED`, no mesmo
     envelope de erro de `GET /auth/me`.
-
-    É **autenticação, não autorização**: nenhuma verificação de `profile`
-    acontece aqui nem em qualquer outro ponto (D3) — médico autenticado chama
-    as rotas do pesquisador e vice-versa. O fluxo da Figura 3 (Seleção de
-    Perfil) coloca a entrada do usuário antes de qualquer operação, e é só isso
-    que a trava cobra.
 
     O preflight CORS não é afetado: o `OPTIONS` é respondido pelo
     `provide_automatic_options` do Flask, sem entrar na view decorada.
@@ -88,6 +82,30 @@ def exigir_sessao(view):
         return view(*args, **kwargs)
 
     return _view
+
+
+def exigir_perfil(*perfis):
+    """
+    Decorador de autorização por perfil. Aplica-se **depois** de `exigir_sessao`.
+
+    `perfis` é uma tupla de strings permitidas (ex.: ("medico", "pesquisador")).
+    Perfil não autorizado → 403 `FORBIDDEN`. Sem sessão continua 401.
+
+    O `profile` é lido do usuário da sessão no servidor, nunca do corpo da
+    requisição. Matriz de permissões documentada no docstring do módulo.
+    """
+    def decorator(view):
+        @functools.wraps(view)
+        def _view(*args, **kwargs):
+            user = svc_auth.current_user()
+            if user is None:
+                return _erro("Autenticação necessária.", 401, "UNAUTHENTICATED")
+            if user.profile not in perfis:
+                return _erro("Acesso negado para o seu perfil.", 403, "FORBIDDEN")
+            return view(*args, **kwargs)
+        _view.__perfis_permitidos__ = perfis
+        return _view
+    return decorator
 
 
 def _artefato(nome):
@@ -156,7 +174,7 @@ def me():
 # US01 — formulário das 30 características
 # ----------------------------------------------------------------------
 @api_bp.route("/features/schema", methods=["GET"])
-@exigir_sessao
+@exigir_perfil("medico", "pesquisador")
 def schema():
     return jsonify(feature_schema())
 
@@ -165,7 +183,7 @@ def schema():
 # US02 / US03 / US07 — classificação com registro automático
 # ----------------------------------------------------------------------
 @api_bp.route("/predictions", methods=["POST"])
-@exigir_sessao
+@exigir_perfil("medico")
 def criar_predicao():
     inicio = time.perf_counter()
     payload = request.get_json(silent=True)
@@ -221,15 +239,19 @@ def criar_predicao():
 # US07 — histórico
 # ----------------------------------------------------------------------
 @api_bp.route("/predictions", methods=["GET"])
-@exigir_sessao
+@exigir_perfil("medico", "pesquisador")
 def listar_predicoes():
-    return jsonify(svc_avaliacoes.listar(validar_filtros_historico(request.args)))
+    user = svc_auth.current_user()
+    return jsonify(svc_avaliacoes.listar(
+        validar_filtros_historico(request.args), profile=user.profile if user else None
+    ))
 
 
 @api_bp.route("/predictions/<int:evaluation_id>", methods=["GET"])
-@exigir_sessao
+@exigir_perfil("medico", "pesquisador")
 def obter_predicao(evaluation_id):
-    av = svc_avaliacoes.obter(evaluation_id)
+    user = svc_auth.current_user()
+    av = svc_avaliacoes.obter(evaluation_id, profile=user.profile if user else None)
     if av is None:
         return _erro("Avaliação não encontrada.", 404, "NOT_FOUND")
     return jsonify(av)
@@ -239,7 +261,7 @@ def obter_predicao(evaluation_id):
 # US05 / US06 — modelos, métricas, importância, reprodutibilidade
 # ----------------------------------------------------------------------
 @api_bp.route("/models", methods=["GET"])
-@exigir_sessao
+@exigir_perfil("pesquisador")
 def listar_modelos():
     modelos = (TrainedModel.query
                .order_by(TrainedModel.trained_at.desc(), TrainedModel.id.desc()).all())
@@ -296,7 +318,7 @@ def _linhas_mais_recentes_por_modelo():
 
 
 @api_bp.route("/models/comparison", methods=["GET"])
-@exigir_sessao
+@exigir_perfil("pesquisador")
 def comparar_modelos():
     bundle = load_bundle()  # levanta ModeloIndisponivel se não houver treino
     metrics, config = bundle["metrics"], _artefato("train_config.json")
@@ -396,7 +418,7 @@ def comparar_modelos():
 
 
 @api_bp.route("/models/features", methods=["GET"])
-@exigir_sessao
+@exigir_perfil("pesquisador")
 def importancia_features():
     load_bundle()
     dados = _artefato("feature_importance.json")
@@ -418,7 +440,7 @@ def importancia_features():
 
 
 @api_bp.route("/models/export", methods=["GET"])
-@exigir_sessao
+@exigir_perfil("pesquisador")
 def exportar_metricas():
     if request.args.get("format", "csv") != "csv":
         raise ErroValidacao("Formato não suportado; use format=csv.")
@@ -433,7 +455,7 @@ def exportar_metricas():
 # US04 / US05 / US06 — treino sob demanda e promoção de modelo (D6, RNF04)
 # ----------------------------------------------------------------------
 @api_bp.route("/training-runs", methods=["POST"])
-@exigir_sessao
+@exigir_perfil("pesquisador")
 def criar_training_run():
     models, test_size, grid_search, hyperparameters = validar_training_run(request.get_json(silent=True))
 
@@ -472,7 +494,7 @@ def criar_training_run():
 
 
 @api_bp.route("/training-runs/<int:training_run_id>", methods=["GET"])
-@exigir_sessao
+@exigir_perfil("pesquisador")
 def obter_training_run(training_run_id):
     run = db.session.get(TrainingRun, training_run_id)
     if run is None:
@@ -483,7 +505,7 @@ def obter_training_run(training_run_id):
 
 
 @api_bp.route("/models/<int:model_id>/threshold", methods=["PUT"])
-@exigir_sessao
+@exigir_perfil("pesquisador")
 def ajustar_threshold(model_id):
     threshold = validar_threshold(request.get_json(silent=True))
 

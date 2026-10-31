@@ -1,66 +1,144 @@
+"""
+Testes de cadastro e autenticação de usuários.
+
+Cobre registro via API (perfil médico/pesquisador), hash de senha PBKDF2,
+rejeição de e-mail duplicado e perfil inválido, e autenticação com senha
+correta/errada. Usa a base de teste comum (tests/base.py) que configura
+SQLite em memória ou PostgreSQL via TEST_DATABASE_URL.
+"""
 import unittest
 
-from app import create_app
-from db.models import Papel, Usuario, db
-from services.avaliacoes import medico_existe
-from services.usuarios import ErroUsuario, criar_usuario
+from werkzeug.security import check_password_hash
+
+from db.models import User, db
+from tests.base import ApiTestCase
 
 
-class UsuarioTest(unittest.TestCase):
-    def setUp(self):
-        # SQLite em memória: nunca toca o banco de desenvolvimento.
-        self.app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
-        self.ctx = self.app.app_context()
-        self.ctx.push()
+class TestCadastroUsuario(ApiTestCase):
 
-    def tearDown(self):
-        db.session.remove()
-        self.ctx.pop()
+    def test_registra_medico_e_abre_sessao(self):
+        resp = self.client.post("/api/v1/auth/register", json={
+            "name": "Ana", "email": "ANA@exemplo.com",
+            "password": "senha1234", "profile": "medico",
+        })
+        self.assertEqual(resp.status_code, 201, resp.get_json())
+        data = resp.get_json()
+        self.assertEqual(data["user"]["profile"], "medico")
+        self.assertNotIn("password_hash", data["user"])
 
-    def test_cria_com_papel_e_senha_com_hash(self):
-        u = criar_usuario(nome="Ana", email="ANA@exemplo.com ", senha="senha-forte-1", papel="medico")
-        self.assertEqual(u.email, "ana@exemplo.com")
-        self.assertIs(u.papel, Papel.MEDICO)
-        self.assertNotIn("senha-forte-1", u.senha_hash)
-        self.assertTrue(u.senha_confere("senha-forte-1"))
-        self.assertFalse(u.senha_confere("outra"))
+        # Verifica no banco que o hash foi gravado com PBKDF2.
+        user = db.session.get(User, data["user"]["id"])
+        self.assertIsNotNone(user)
+        self.assertTrue(user.password_hash.startswith("pbkdf2:"))
+        self.assertTrue(check_password_hash(user.password_hash, "senha1234"))
 
-    def test_papel_persistido_como_texto(self):
-        criar_usuario(nome="Bia", email="bia@exemplo.com", senha="senha-forte-1", papel=Papel.PESQUISADOR)
-        db.session.expire_all()
-        self.assertEqual(Usuario.query.one().papel, Papel.PESQUISADOR)
+    def test_registra_pesquisador(self):
+        resp = self.client.post("/api/v1/auth/register", json={
+            "name": "Bia", "email": "bia@exemplo.com",
+            "password": "senha1234", "profile": "pesquisador",
+        })
+        self.assertEqual(resp.status_code, 201, resp.get_json())
+        self.assertEqual(resp.get_json()["user"]["profile"], "pesquisador")
 
     def test_to_dict_nao_expoe_hash(self):
-        u = criar_usuario(nome="Ana", email="ana@exemplo.com", senha="senha-forte-1", papel="medico")
-        self.assertEqual(set(u.to_dict()), {"id", "nome", "email", "papel"})
+        resp = self.client.post("/api/v1/auth/register", json={
+            "name": "Ana", "email": "ana@exemplo.com",
+            "password": "senha1234", "profile": "medico",
+        })
+        user_dict = resp.get_json()["user"]
+        self.assertNotIn("password_hash", user_dict)
+        self.assertIn("id", user_dict)
+        self.assertIn("name", user_dict)
+        self.assertIn("email", user_dict)
+        self.assertIn("profile", user_dict)
 
-    def test_rejeita_dados_invalidos(self):
-        casos = [
-            dict(nome="", email="a@b.com", senha="senha-forte-1", papel="medico"),
-            dict(nome="Ana", email="sem-arroba", senha="senha-forte-1", papel="medico"),
-            dict(nome="Ana", email="a@b.com", senha="curta", papel="medico"),
-            dict(nome="Ana", email="a@b.com", senha="senha-forte-1", papel="admin"),
-        ]
-        for caso in casos:
-            with self.subTest(caso=caso), self.assertRaises(ErroUsuario):
-                criar_usuario(**caso)
-        self.assertEqual(Usuario.query.count(), 0)
+    def test_rejeita_perfil_invalido(self):
+        resp = self.client.post("/api/v1/auth/register", json={
+            "name": "Ana", "email": "ana@exemplo.com",
+            "password": "senha1234", "profile": "admin",
+        })
+        self.assertEqual(resp.status_code, 400, resp.get_json())
+        self.assertEqual(User.query.count(), 0)
 
-    def test_medico_existe_so_para_medico_ativo(self):
-        medico = criar_usuario(nome="Ana", email="ana@exemplo.com", senha="senha-forte-1", papel="medico")
-        pesq = criar_usuario(nome="Bia", email="bia@exemplo.com", senha="senha-forte-1", papel="pesquisador")
-        inativo = criar_usuario(nome="Caio", email="caio@exemplo.com", senha="senha-forte-1", papel="medico")
-        inativo.ativo = False
-        db.session.commit()
-        self.assertTrue(medico_existe(medico.id))
-        self.assertFalse(medico_existe(pesq.id))
-        self.assertFalse(medico_existe(inativo.id))
-        self.assertFalse(medico_existe(9999))
+    def test_rejeita_senha_curta(self):
+        resp = self.client.post("/api/v1/auth/register", json={
+            "name": "Ana", "email": "ana@exemplo.com",
+            "password": "curta", "profile": "medico",
+        })
+        self.assertEqual(resp.status_code, 400, resp.get_json())
+        self.assertEqual(User.query.count(), 0)
+
+    def test_rejeita_email_invalido(self):
+        resp = self.client.post("/api/v1/auth/register", json={
+            "name": "Ana", "email": "sem-arroba",
+            "password": "senha1234", "profile": "medico",
+        })
+        self.assertEqual(resp.status_code, 400, resp.get_json())
+        self.assertEqual(User.query.count(), 0)
 
     def test_rejeita_email_duplicado(self):
-        criar_usuario(nome="Ana", email="ana@exemplo.com", senha="senha-forte-1", papel="medico")
-        with self.assertRaises(ErroUsuario):
-            criar_usuario(nome="Outra", email="ANA@exemplo.com", senha="senha-forte-2", papel="pesquisador")
+        self.client.post("/api/v1/auth/register", json={
+            "name": "Ana", "email": "ana@exemplo.com",
+            "password": "senha1234", "profile": "medico",
+        })
+        resp = self.client.post("/api/v1/auth/register", json={
+            "name": "Outra", "email": "ANA@exemplo.com",
+            "password": "outra1234", "profile": "pesquisador",
+        })
+        self.assertEqual(resp.status_code, 400, resp.get_json())
+        self.assertEqual(User.query.count(), 1)
+
+    def test_perfil_nao_alteravel_pelo_frontend(self):
+        """O perfil vem do corpo do register; a autorização é verificada
+        no servidor via sessão, não pelo corpo da requisição."""
+        self.registrar_e_logar(email="medico@exemplo.com", profile="medico")
+        # Tentar classificar como médico funciona.
+        features = {f"worst_{c}": 0.1 for c in (
+            "radius", "texture", "perimeter", "area", "smoothness",
+            "compactness", "concavity", "concave_points", "symmetry", "fractal_dimension"
+        )}
+        features.update({f"mean_{c}": 0.1 for c in (
+            "radius", "texture", "perimeter", "area", "smoothness",
+            "compactness", "concavity", "concave_points", "symmetry", "fractal_dimension"
+        )})
+        resp = self.client.post("/api/v1/predictions", json={"features": features})
+        # Pode ser 200 ou 503 (modelo não disponível), mas não 403.
+        self.assertNotEqual(resp.status_code, 403)
+
+
+class TestAutenticacao(ApiTestCase):
+
+    def test_login_senha_correta(self):
+        self.client.post("/api/v1/auth/register", json={
+            "name": "Ana", "email": "ana@exemplo.com",
+            "password": "senha1234", "profile": "medico",
+        })
+        # Limpa a sessão do register para testar login independente.
+        with self.client.session_transaction() as sess:
+            sess.clear()
+        resp = self.client.post("/api/v1/auth/login", json={
+            "email": "ana@exemplo.com", "password": "senha1234",
+        })
+        self.assertEqual(resp.status_code, 200, resp.get_json())
+        self.assertEqual(resp.get_json()["user"]["email"], "ana@exemplo.com")
+
+    def test_login_senha_errada(self):
+        self.client.post("/api/v1/auth/register", json={
+            "name": "Ana", "email": "ana@exemplo.com",
+            "password": "senha1234", "profile": "medico",
+        })
+        with self.client.session_transaction() as sess:
+            sess.clear()
+        resp = self.client.post("/api/v1/auth/login", json={
+            "email": "ana@exemplo.com", "password": "errada",
+        })
+        self.assertEqual(resp.status_code, 401)
+
+    def test_login_email_inexistente(self):
+        resp = self.client.post("/api/v1/auth/login", json={
+            "email": "nada@exemplo.com", "password": "senha1234",
+        })
+        self.assertEqual(resp.status_code, 401)
 
 
 if __name__ == "__main__":

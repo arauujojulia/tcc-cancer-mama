@@ -22,21 +22,32 @@ ferramenta **não** processa imagens de biópsia.
 ## ⚠️ Aviso de segurança (leia antes de expor a aplicação)
 
 **Todas as rotas de dados exigem sessão válida.** Sem o cookie de sessão, elas
-respondem 401 `UNAUTHENTICATED`; só `/auth/*` e `/health` são públicas. A trava
-é de **autenticação, não de autorização**.
+respondem 401 `UNAUTHENTICATED`; só `/auth/*` e `/health` são públicas.
 
-Esta aplicação **não implementa controle de acesso por perfil**. O campo
-`profile` (`medico` / `pesquisador`) decide apenas o menu exibido no frontend;
-**nenhuma rota é bloqueada por perfil** (D3). Logo, **qualquer usuário
-autenticado** — médico ou pesquisador, indistintamente — consegue ler o
-histórico identificado inteiro, disparar treinos e promover modelos.
+**Autorização por perfil no servidor.** O campo `profile` (`medico` /
+`pesquisador`) é lido da sessão em cada requisição e limita as rotas (403
+`FORBIDDEN` quando o perfil não tem permissão):
 
-No modo de registro **identificado**, o nome e o prontuário da paciente são
-gravados **em texto puro** no banco, sem nenhuma criptografia.
+| Rota | médico | pesquisador |
+|---|---|---|
+| `GET /features/schema` | sim | sim |
+| `POST /predictions` | sim | não |
+| `GET /predictions`, `GET /predictions/{id}` | sim (nome e prontuário em claro) | sim, **sem** nome e prontuário (`null`) |
+| `GET /models`, `/models/comparison`, `/models/features`, `/models/export` | não | sim |
+| `POST /training-runs`, `GET /training-runs/{id}`, `PUT /models/{id}/threshold` | não | sim |
 
-**Não exponha esta aplicação fora de um ambiente controlado.** Ela foi
-construída para fins acadêmicos (TCC) e para demonstração; não há segregação de
-dados, cifragem em repouso nem trilha de auditoria.
+**Criptografia dos dados da paciente.** No modo de registro **identificado**, o
+nome e o prontuário são cifrados em repouso com **AES-256-GCM** (nonce aleatório
+de 12 bytes por valor, dado associado por campo e prefixo de versão `enc:v1:`).
+A chave vem da variável de ambiente `PATIENT_DATA_KEY` (32 bytes em base64);
+sem ela, o modo identificado é recusado com erro. Para cifrar registros que já
+estavam em texto puro: `python -m services.crypto --migrar`.
+
+**Limitações conhecidas.** Não há JWT nem trilha de auditoria de acesso. O
+perfil é escolhido pelo próprio usuário no cadastro aberto (`POST
+/auth/register`): a autorização por perfil controla o acesso às rotas, mas a
+atribuição do perfil não é restrita. **Não exponha esta aplicação fora de um
+ambiente controlado.** Ela foi construída para fins acadêmicos (TCC).
 
 ## Documentação
 
@@ -127,6 +138,7 @@ Copie `.env.example` para `.env`:
 | `DATABASE_URL` | PostgreSQL via driver `psycopg` v3, ex.: `postgresql+psycopg://usuario:senha@localhost:5432/tcc_cancer_mama`. **Se omitida**, a aplicação usa SQLite local (`sqlite:///tcc_cancer_mama.db`) — só para desenvolvimento. |
 | `CORS_ORIGINS` | Lista explícita das origens do frontend (separadas por vírgula). O cookie de sessão viaja com credenciais, então `*` é recusado pelo navegador. Ex.: `http://localhost:5173`. |
 | `SECRET_KEY` | Assina o cookie de sessão. Sem ela, uma chave temporária é gerada em memória (as sessões caem a cada reinício) e um aviso é registrado no log. |
+| `PATIENT_DATA_KEY` | Chave AES-256-GCM dos dados da paciente (32 bytes em base64). Gere com `python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"`. Nunca versione a chave. |
 | `SESSION_COOKIE_SECURE` | `true` atrás de HTTPS; `false` em desenvolvimento (HTTP). |
 
 > O modelo de dados não tem migração de linhas entre versões de schema. Se já
@@ -206,19 +218,34 @@ Para servir tudo pelo próprio Flask: `npm run build` e abra
 python -m unittest discover -s tests -t . -v
 ```
 
+Por padrão a suíte usa SQLite em memória. Para rodar contra **PostgreSQL 16**
+(banco-alvo, RNF07), crie um banco **cujo nome termine em `_test`** (a suíte
+executa `drop_all()` e recusa outros nomes) e informe a URL:
+
+```bash
+docker run --rm -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=tcc_cancer_mama_test -p 5432:5432 postgres:16
+TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/tcc_cancer_mama_test \
+  python -m unittest discover -s tests -t . -v
+```
+
+O workflow `.github/workflows/tests.yml` roda a suíte nos dois bancos a cada
+pull request.
+
 ---
 
 ## Contrato da API (`/api/v1`)
 
 Identificadores (rotas, campos, códigos de erro) em inglês; mensagens ao usuário
 em português. Envelope de erro sempre `{"error": "...", "code": "..."}`.
-Códigos: `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `NOT_FOUND` (404),
+Códigos: `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403),
+`NOT_FOUND` (404),
 `MODEL_UNAVAILABLE` (503), `TIMEOUT` (504), `SENSITIVITY_BELOW_TARGET` (400),
 `INTERNAL_ERROR` (500).
 
 A coluna **Sessão** indica se a rota exige cookie de sessão válido. Sem sessão,
-as rotas marcadas respondem 401 `UNAUTHENTICATED`. Não há verificação de
-perfil em nenhuma delas (D3).
+as rotas marcadas respondem 401 `UNAUTHENTICATED`. Com sessão, o perfil também
+é verificado no servidor (tabela de permissões no aviso de segurança acima):
+perfil sem permissão recebe 403 `FORBIDDEN`.
 
 | Método | Rota | Sessão | O que faz | História de usuário |
 |---|---|---|---|---|
@@ -247,7 +274,7 @@ POST /api/v1/predictions
 ```
 
 No modo identificado, `mode` é `"identificado"` e `patient_name` /
-`patient_record` são obrigatórios (gravados **em texto puro** — ver aviso de
+`patient_record` são obrigatórios (gravados **cifrados com AES-256-GCM** — ver aviso de
 segurança). O modo anônimo descarta qualquer dado de paciente enviado.
 
 > Nota de contrato: `confidence_band` assume os valores `alta`, `media`
@@ -265,8 +292,8 @@ combinados por WhatsApp em 09/10/2026). Detalhe completo em
 | # | Decisão | Justificativa |
 |---|---|---|
 | **D1** | API em inglês sob `/api/v1`; tabelas `evaluations` / `training_runs`. | Os diagramas de sequência são o artefato mais recente e é o que o professor avalia. |
-| **D2** | **Remover a criptografia AES-256-GCM.** Modo identificado continua existindo, gravando `patient_name` / `patient_record` em texto puro. | Pedido explícito da equipe (prazo curto). O RNF05 precisa ser reescrito no documento. |
-| **D3** | **Sem JWT, sem RBAC, sem auditoria.** Só cadastro e login; o perfil é declarado no cadastro e serve apenas para escolher as telas, sem trava de autorização. | Pedido explícito da equipe e coerente com o texto "sem a necessidade de mecanismos adicionais de controle de acesso nesta etapa". |
+| **D2** | **Criptografia AES-256-GCM dos dados da paciente (restabelecida).** `patient_name` / `patient_record` são cifrados em repouso (`PATIENT_DATA_KEY`). | Correção pedida pelo orientador (30/10/2026); substitui a decisão anterior de gravar em texto puro. |
+| **D3** | **Autorização por perfil (RBAC simples) no servidor; sem JWT e sem trilha de auditoria.** O perfil da sessão limita as rotas (403 `FORBIDDEN`). | Correção pedida pelo orientador (30/10/2026). JWT e auditoria seguem fora do escopo desta entrega. |
 | **D4** | Senha com hash `werkzeug.security` (pbkdf2), nunca em texto. | Não é RBAC nem segregação de perfil; é só não deixar a senha legível no banco. |
 | **D5** | **PostgreSQL** como alvo via `DATABASE_URL`; sem a variável, cai em SQLite local. | O documento fixa PostgreSQL 16; a máquina de desenvolvimento não tem Postgres. |
 | **D6** | **Implementar GridSearchCV** (5 folds estratificados, `scoring="recall"`). | Está no diagrama do Laboratório de Modelos, e o diagrama é avaliado. |
@@ -307,11 +334,11 @@ Outras decisões técnicas:
   registra o novo ponto de operação no banco e no Laboratório, mas **não** troca
   o artefato que classifica; para isso, rode `python -m ml.train` e reinicie a
   API.
-- **D10 — sessão obrigatória, sem autorização por perfil.** Todas as rotas fora
-  de `/auth/*` exigem sessão válida (401 `UNAUTHENTICATED` sem ela), aplicada
-  rota a rota pelo decorador `exigir_sessao` em `api/routes.py`. Nenhuma rota
-  verifica `profile`: um médico autenticado chama as rotas do pesquisador e
-  vice-versa (D3). É autenticação, não autorização.
+- **D10 — sessão obrigatória e autorização por perfil.** Todas as rotas fora
+  de `/auth/*` exigem sessão válida (401 `UNAUTHENTICATED` sem ela), pelo
+  decorador `exigir_sessao`, e o perfil é verificado rota a rota por
+  `exigir_perfil` em `api/routes.py` (403 `FORBIDDEN`). Um teste varre o
+  `url_map` e falha se uma rota nova nascer sem `exigir_perfil`.
 - **D11 — as métricas reportadas são do teste; o portão é do treino
   out-of-fold.** Em `trained_models`, `accuracy`, `sensitivity`, `specificity`,
   `false_negative_rate` e `confusion_matrix` são **sempre** do conjunto de teste
@@ -366,7 +393,7 @@ Outras decisões técnicas:
 | RNF02 | Classificação em < 2 s; `elapsed_ms` gravado e testado | ✅ Implementado |
 | RNF03 | Partições, hiperparâmetros, semente e versões versionados | ✅ Implementado |
 | RNF04 | Taxa de falsos negativos reportada; limiar de segurança 0,97 | ✅ Implementado |
-| RNF05 | **Alterado por D2** — modo identificado sem criptografia | ⚠️ Documento a corrigir |
+| RNF05 | Dados da paciente cifrados em repouso (AES-256-GCM) | ✅ Implementado |
 
 > O estado detalhado, com onde cada requisito foi implementado e como foi
 > verificado, está em `.agents/RELATORIO-IMPLEMENTACAO.md` — inclusive os três
