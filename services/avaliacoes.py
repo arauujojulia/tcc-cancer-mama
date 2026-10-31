@@ -1,11 +1,23 @@
 """
 Registro e consulta do histórico de avaliações (US07 / UC07).
 
-Os dados de paciente do modo identificado são gravados em texto puro: não há
-criptografia na aplicação e ela não deve ser exposta fora de ambiente
-controlado.
+Os dados de paciente do modo identificado são cifrados com AES-256-GCM
+(TypeDecorator `EncryptedText` em db/models.py). O médico vê os dados em claro;
+o pesquisador recebe `null` (minimização de dados — LGPD).
 """
 from db.models import Evaluation, db
+
+
+def _av_dict(av: Evaluation, profile: str | None) -> dict:
+    """
+    Converte uma avaliação em dict, ocultando dados identificáveis para
+    pesquisadores (minimização de dados). O médico vê em claro.
+    """
+    d = av.to_dict()
+    if profile != "medico":
+        d["patient_name"] = None
+        d["patient_record"] = None
+    return d
 
 
 def registrar(*, features: dict, resultado: dict, tempo_ms: float,
@@ -31,7 +43,7 @@ def registrar(*, features: dict, resultado: dict, tempo_ms: float,
     return av
 
 
-def listar(filtros: dict) -> dict:
+def listar(filtros: dict, profile: str | None = None) -> dict:
     """Envelope paginado {items, page, limit, total}, mais recentes primeiro."""
     q = Evaluation.query
     if filtros["label"]:
@@ -53,13 +65,15 @@ def listar(filtros: dict) -> dict:
     itens = q.offset((page - 1) * limit).limit(limit).all()
 
     return {
-        "items": [a.to_dict() for a in itens],
+        "items": [_av_dict(a, profile) for a in itens],
         "page": page,
         "limit": limit,
         "total": total,
     }
 
 
-def obter(evaluation_id: int):
+def obter(evaluation_id: int, profile: str | None = None):
     av = db.session.get(Evaluation, evaluation_id)
-    return None if av is None else av.to_dict()
+    if av is None:
+        return None
+    return _av_dict(av, profile)

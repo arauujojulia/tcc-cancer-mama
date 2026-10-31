@@ -135,18 +135,25 @@ def _caminho_oof(artifacts_dir, nome):
 def regenerar_oof_ausentes(metrics: dict, artifacts_dir=ARTIFACTS_DIR) -> None:
     """
     Regenera deterministicamente `{model}_oof.json` para cada modelo
-    pré-semeado em `artifacts_dir` cujo arquivo ainda não exista (design.md
-    §2.4, §6). Necessário porque os modelos versionados no repositório
-    nasceram antes de o treino sob demanda passar a gravar o vetor
-    out-of-fold, e `PUT /models/{id}/threshold` depende dele para recalcular
-    a sensibilidade sem re-treinar.
+    em `artifacts_dir` cujo arquivo ainda não exista (design.md §2.4, §6).
+    Necessário porque os modelos versionados no repositório nasceram antes
+    de o treino sob demanda passar a gravar o vetor out-of-fold, e
+    `PUT /models/{id}/threshold` depende dele para recalcular a sensibilidade
+    sem re-treinar.
 
     Usa split.json (chave 'treino', em português — não renomear), clona o
     estimador carregado do .joblib (traz os mesmos get_params do treino) e
     reproduz exatamente a mesma validação cruzada do treino
     (StratifiedKFold(5, shuffle=True, random_state=42)). Uma vez gravado, o
     arquivo é reaproveitado nas subidas seguintes — não recomputa de novo.
+
+    IMPORTANTE: Não escreve em ARTIFACTS_DIR (referência versionada do artigo).
+    Só regenera em diretórios de execução sob demanda (`runs/{id}/`).
     """
+    # Nunca escreve na referência versionada (RNF03 / D8).
+    if artifacts_dir == ARTIFACTS_DIR:
+        return
+
     split = _ler_opcional(artifacts_dir, "split.json")
     if split is None:
         return  # sem split.json não há como reproduzir o treino; nada a fazer
@@ -180,7 +187,7 @@ def _caminho_test_proba(artifacts_dir, nome):
 def regenerar_test_proba_ausentes(metrics: dict, artifacts_dir=ARTIFACTS_DIR) -> None:
     """
     Regenera deterministicamente `{model}_test_proba.json` para cada modelo
-    pré-semeado em `artifacts_dir` cujo arquivo ainda não exista. Espelha
+    em `artifacts_dir` cujo arquivo ainda não exista. Espelha
     `regenerar_oof_ausentes` e existe pela mesma razão: os artefatos de
     referência versionados no repositório nasceram antes de o treino passar a
     gravar as probabilidades do conjunto de teste, e
@@ -192,9 +199,16 @@ def regenerar_test_proba_ausentes(metrics: dict, artifacts_dir=ARTIFACTS_DIR) ->
     `{modelo}.joblib` já ajustado — reproduz exatamente o
     `modelo.predict_proba(scaler.transform(X_teste))` do treino.
 
+    IMPORTANTE: Não escreve em ARTIFACTS_DIR (referência versionada do artigo).
+    Só regenera em diretórios de execução sob demanda (`runs/{id}/`).
+
     Degrada igual ao OOF: sem split.json, sem scaler ou sem o .joblib, retorna
     sem gravar; quem depende do arquivo responde 503.
     """
+    # Nunca escreve na referência versionada (RNF03 / D8).
+    if artifacts_dir == ARTIFACTS_DIR:
+        return
+
     split = _ler_opcional(artifacts_dir, "split.json")
     if split is None or "teste" not in split:
         return  # sem a partição de teste não há como reproduzir as probabilidades
