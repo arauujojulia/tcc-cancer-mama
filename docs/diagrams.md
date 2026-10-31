@@ -32,7 +32,7 @@ sequenceDiagram
     FE->>BE: POST /api/v1/predictions (Payload)
     
     opt Opção por Registro Identificado (BSC-25)
-        BE->>BE: Associa patient_name e patient_record ao registro da avaliação
+        BE->>BE: Cifra patient_name e patient_record (AES-256-GCM) no registro da avaliação
     end
     
     BE->>ML: Passa vetor numérico das 30 características

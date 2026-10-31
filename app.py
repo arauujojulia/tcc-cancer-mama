@@ -14,6 +14,9 @@ Configuração por variáveis de ambiente (ou arquivo .env, ver .env.example):
   SECRET_KEY             assinatura do cookie de sessão (sem ela, uma chave
                          temporária é gerada em memória e um aviso é logado)
   SESSION_COOKIE_SECURE  true para restringir o cookie a HTTPS (padrão: false)
+  PATIENT_DATA_KEY       chave AES-256-GCM dos dados da paciente, 32 bytes em
+                         base64 (sem ela, o modo identificado é recusado com
+                         503 e um aviso é logado)
 """
 import os
 import secrets
@@ -25,6 +28,7 @@ from werkzeug.exceptions import HTTPException
 
 from api.routes import api_bp
 from db.models import db
+from services.crypto import chave_disponivel
 from services.modelos import sincronizar_modelos
 
 load_dotenv()
@@ -60,6 +64,15 @@ def create_app(config=None):
 
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///tcc_cancer_mama.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    # Sem isto, erros do SQLAlchemy levam os parâmetros da instrução para o log,
+    # e neles estão os dados da paciente antes de cifrar.
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"hide_parameters": True}
+
+    if not chave_disponivel():
+        app.logger.warning(
+            "PATIENT_DATA_KEY ausente ou inválida: o modo identificado será "
+            "recusado e dados cifrados não poderão ser lidos; defina-a no .env."
+        )
 
     chave = os.environ.get("SECRET_KEY")
     if not chave:

@@ -123,7 +123,7 @@ export default function HistoricoPage() {
                           ? "Anônimo"
                           : a.patient_name == null && a.patient_record == null
                             ? "Identificado (oculto)"
-                            : `${a.patient_name} · ${a.patient_record}`}
+                            : `${a.patient_name ?? "—"} · ${a.patient_record ?? "—"}`}
                       </td>
                       <td>{Math.round(a.elapsed_ms)} ms</td>
                     </tr>

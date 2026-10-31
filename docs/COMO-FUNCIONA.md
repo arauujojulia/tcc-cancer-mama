@@ -654,11 +654,11 @@ de sequência do documento original e foi deliberadamente retirado do código.
    conta, de qualquer perfil, consegue listar `GET /api/v1/predictions` inteiro, com
    `patient_name` e `patient_record` de todos os casos. Não há filtro por autoria: o
    `evaluations.user_id` registra quem classificou, mas não restringe quem lê.
-2. **Os dados de paciente ficam em texto no banco.** A criptografia AES-256-GCM
-   prometida pelo RNF05 foi removida (decisão **D2**). No modo identificado, nome e
-   prontuário são gravados em texto puro em `evaluations.patient_name` /
-   `patient_record`. A própria tela de classificação exibe esse aviso quando o modo
-   identificado é escolhido.
+2. **Só nome e prontuário são cifrados.** No modo identificado, esses dois campos são
+   gravados com AES-256-GCM (decisão **D2**, RNF05) em `evaluations.patient_name` /
+   `patient_record`, com dado associado por campo e por linha. As características e o
+   resultado da avaliação ficam em claro. A tela de classificação informa a cifragem
+   quando o modo identificado é escolhido.
 3. **Qualquer usuário autenticado dispara treinos e promove modelos.** Inclusive uma
    conta de perfil médico.
 
@@ -668,9 +668,9 @@ total: saiu a divergência do hash (pbkdf2 × scrypt), porque ela foi resolvida 
 código** e não na redação (bullet acima), e entrou o item (b) do feedback do professor,
 que faltava na lista.
 
-1. **RNF05 e o FA01 do UC07** ainda prometem armazenamento criptografado em
-   conformidade com a LGPD. Precisam descrever o que foi construído: modo identificado
-   gravando em texto puro, com a ferramenta restrita a ambiente controlado (D2).
+1. **RNF05 e o FA01 do UC07** precisam descrever o que foi construído: nome e prontuário
+   cifrados com AES-256-GCM no modo identificado, características e resultado em claro,
+   e a ferramenta restrita a ambiente controlado (D2).
 2. **A trava de sensibilidade está enunciada como "no conjunto de teste".** A seção que
    descreve o Módulo Laboratório de Modelos e Avaliação Científica (§4.2.4) diz
    "sensibilidade mínima de (97%) no conjunto de teste". Por **D11**, o portão é
@@ -720,9 +720,9 @@ que faltava na lista.
    Duas observações para quem for colar isso. A primeira: a redação do RNF04 acima já
    embute a correção da pendência 2 desta lista — a meta é verificada **out-of-fold no
    treino**, não no conjunto de teste. A segunda: o item (b) do feedback também cita
-   registro de auditoria e criptografia AES-256-GCM, que **não** devem entrar como
-   requisito, porque foram retirados do escopo por **D2** e **D3**; é a pendência 1 desta
-   lista que trata disso, descrevendo o que foi efetivamente construído. O professor pediu
+   registro de auditoria e criptografia AES-256-GCM. A auditoria **não** deve entrar como
+   requisito, porque foi retirada do escopo por **D3**; a criptografia foi restabelecida
+   por **D2**, e é a pendência 1 desta lista que trata dela. O professor pediu
    ainda que os novos requisitos fossem ligados às histórias **HT03** (perfis de médico e
    pesquisador) e **US07** (histórico), o que o RF08 e o RF09 acima permitem fazer
    diretamente no Quadro 11.
@@ -766,7 +766,7 @@ que faltava na lista.
    redação, não defeito: o retry teria de ser decidido como requisito antes de existir.
 
 > **A aplicação não deve ser exposta fora de um ambiente controlado.** Não há segregação
-> de dados por usuário, cifragem em repouso nem trilha de auditoria. Ela foi construída
+> de dados por usuário nem trilha de auditoria. Ela foi construída
 > para fins acadêmicos e para demonstração, com dados da base pública WDBC, e não para
 > uso com dados de pacientes reais.
 
@@ -867,9 +867,9 @@ desempenho) → **US05**; **UC06** (exibir características mais relevantes) →
 
 Prefixo `/api/v1`. Identificadores em inglês, mensagens ao usuário em português,
 envelope de erro `{"error": "...", "code": "..."}`. Os códigos **emitidos pelo código**
-são sete: `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `NOT_FOUND` (404),
-`SENSITIVITY_BELOW_TARGET` (400), `MODEL_UNAVAILABLE` (503), `TIMEOUT` (504) e
-`INTERNAL_ERROR` (500).
+são oito: `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `NOT_FOUND` (404),
+`SENSITIVITY_BELOW_TARGET` (400), `MODEL_UNAVAILABLE` (503),
+`ENCRYPTION_UNAVAILABLE` (503), `TIMEOUT` (504) e `INTERNAL_ERROR` (500).
 
 > **O envelope vale também para falha inesperada.** O `INTERNAL_ERROR` (500) do README e
 > da especificação consolidada **está implementado**: `app.py` registra um
@@ -979,13 +979,13 @@ cada RNF —, não do Quadro 11, que mapeia apenas RF→US.
 | **RNF02** — classificação em até 2 s | UC02 FA02 | US02 | `api/routes.py:criar_predicao` (`time.perf_counter`, `LIMITE_TEMPO_MS = 2000`, 504 `TIMEOUT` sem gravar) · `db/models.py:Evaluation.elapsed_ms` · `ml/predict.py:load_bundle` (modelo em memória) |
 | **RNF03** — partição, hiperparâmetros, semente e versões versionados | UC04 (passo 6) | US04 | `ml/train.py:train_and_evaluate` (grava `split.json`, `train_config.json`) · `ml/train.py:sha256_arquivo` e `_commit_git` · `ml/train.py:diretorio_execucao` (isolamento D8) · `api/routes.py:comparar_modelos` (bloco `reproducibility`) |
 | **RNF04** — minimizar e reportar falsos negativos | UC05 | US05 | `ml/train.py:escolher_limiar_seguranca` (limiar out-of-fold) · `ml/train.py:compute_metrics` (`taxa_falsos_negativos`) · `services/modelos.py:sensibilidade_oof` (portão) · `services/modelos.py:promover_modelo` · `api/routes.py:ajustar_threshold` |
-| **RNF05** — **alterado por D2**: modo identificado **sem** criptografia | UC07 FA01 | US07 | `db/models.py:Evaluation.patient_name` / `patient_record` (texto puro) · `services/validation.py:validar_paciente` · mitigação mínima: `api/routes.py:exigir_sessao` (D10) |
+| **RNF05** — nome e prontuário cifrados com AES-256-GCM (D2) | UC07 FA01 | US07 | `services/crypto.py` · `services/avaliacoes.py:registrar` e `_av_dict` · `services/validation.py:validar_paciente` |
 
 > **Pendências de documento** (redação do TCC a corrigir; o código está correto):
 >
-> - **RNF05 e o FA01 do UC07** prometem armazenamento criptografado em conformidade com
->   a LGPD; o código não cifra nada (D2). Precisam descrever o modo identificado
->   gravando em texto puro, com a ferramenta restrita a ambiente controlado.
+> - **RNF05 e o FA01 do UC07** precisam descrever o que foi construído: nome e prontuário
+>   cifrados com AES-256-GCM no modo identificado, características e resultado em claro,
+>   e a ferramenta restrita a ambiente controlado.
 > - **A trava de sensibilidade** é enunciada na §4.2.4 do documento do TCC como
 >   "sensibilidade mínima de (97%) **no conjunto de teste**". Por D11, o portão é
 >   out-of-fold do treino — é por isso que o SVM passa no portão (0,9706) e não atende à
@@ -1024,7 +1024,7 @@ deixou de ser ressalva de contrato na seção 8: o handler foi implementado em `
 | # | Decisão |
 |---|---|
 | D1 | API em inglês sob `/api/v1`; tabelas `evaluations` / `training_runs` |
-| D2 | criptografia AES-256-GCM removida; modo identificado grava em texto puro |
+| D2 | criptografia AES-256-GCM restabelecida: nome e prontuário cifrados em repouso (`PATIENT_DATA_KEY`) |
 | D3 | sem JWT, sem RBAC, sem auditoria; perfil só escolhe as telas |
 | D4 | senha com hash via `werkzeug.security`, algoritmo fixado em `pbkdf2:sha256` no código, como o texto de D4 descreve (ver seção 6) |
 | D5 | PostgreSQL como alvo via `DATABASE_URL`; SQLite local como fallback de desenvolvimento |

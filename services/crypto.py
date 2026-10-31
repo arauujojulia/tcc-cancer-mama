@@ -2,8 +2,8 @@
 Criptografia AES-256-GCM de dados sensíveis do paciente (Tarefa B2).
 
 Este módulo contém toda a lógica de criptografia: constantes, funções
-`encrypt`/`decrypt`, o `TypeDecorator` `EncryptedText` e o script de migração.
-`db/models.py` importa `EncryptedText` daqui, evitando duplicação.
+`encrypt`/`decrypt` e o script de migração. O dado associado amarra cada valor à
+coluna e à linha (`ad_linha`): cifrado copiado de outro lugar não decifra.
 
 Chave: variável de ambiente `PATIENT_DATA_KEY` = 32 bytes em base64.
 Gere com:
@@ -15,12 +15,14 @@ Uso da migração (dados existentes em texto puro):
 import base64
 import os
 import sys
-from typing import Any
 
-from sqlalchemy import TypeDecorator, text
+from sqlalchemy import text
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-_ENCRYPT_PREFIX = "enc:v1:"
+from db.models import db as _db
+
+_ENCRYPT_PREFIX = "enc:v2:"
+_PREFIXO_V1 = "enc:v1:"  # dado associado só por coluna; a migração converte para v2
 _AD_EVAL_NAME = b"evaluations.patient_name"
 _AD_EVAL_RECORD = b"evaluations.patient_record"
 
@@ -37,6 +39,16 @@ def _get_key() -> bytes | None:
     return key if len(key) == 32 else None
 
 
+def chave_disponivel() -> bool:
+    """Indica se `PATIENT_DATA_KEY` está configurada e é válida."""
+    return _get_key() is not None
+
+
+def ad_linha(campo: bytes, evaluation_id: int) -> bytes:
+    """Dado associado de um valor: identifica a coluna e a linha."""
+    return b"%s:%d" % (campo, evaluation_id)
+
+
 def encrypt(plaintext: str, associated_data: bytes) -> str:
     """Cifra `plaintext` com AES-256-GCM e devolve a string armazenada."""
     key = _get_key()
@@ -49,8 +61,8 @@ def encrypt(plaintext: str, associated_data: bytes) -> str:
 
 def decrypt(ciphertext: str, associated_data: bytes) -> str:
     """Decifra uma string armazenada e devolve o texto em claro."""
-    if not ciphertext or not ciphertext.startswith(_ENCRYPT_PREFIX):
-        return ciphertext
+    if not ciphertext.startswith(_ENCRYPT_PREFIX):
+        raise ValueError("Valor não está cifrado.")
     key = _get_key()
     if key is None:
         raise RuntimeError("PATIENT_DATA_KEY não configurada ou inválida")
@@ -59,42 +71,23 @@ def decrypt(ciphertext: str, associated_data: bytes) -> str:
     return AESGCM(key).decrypt(nonce, ct, associated_data).decode("utf-8")
 
 
-class EncryptedText(TypeDecorator):
-    """TypeDecorator: cifra/descifra transparentemente com AES-256-GCM."""
-
-    impl = None  # set via load_dialect_impl
-    cache_ok = True
-
-    def __init__(self, associated_data: bytes, **kw: Any):
-        super().__init__(**kw)
-        self.ad = associated_data
-
-    def load_dialect_impl(self, dialect):
-        from sqlalchemy import Text
-        return Text()
-
-    def process_bind_param(self, value, dialect):
-        if value is None:
-            return None
-        return encrypt(value, self.ad)
-
-    def process_result_value(self, value, dialect):
-        if value is None:
-            return None
-        return decrypt(value, self.ad)
+def _recifrar(valor: str | None, campo: bytes, evaluation_id: int) -> str | None:
+    """Valor em texto puro ou em `enc:v1:` no formato atual; o resto fica igual."""
+    if valor is None or valor.startswith(_ENCRYPT_PREFIX):
+        return valor
+    if valor.startswith(_PREFIXO_V1):
+        valor = decrypt(_ENCRYPT_PREFIX + valor[len(_PREFIXO_V1):], campo)
+    return encrypt(valor, ad_linha(campo, evaluation_id))
 
 
 def migrar_dados_existentes():
     """
     Cifra in-place as linhas de `evaluations` cujo `patient_name` ou
-    `patient_record` ainda estão em texto puro.
+    `patient_record` ainda estão em texto puro ou no formato `enc:v1:`.
 
     Usa SQLAlchemy Core (`UPDATE`) para contornar os listeners de imutabilidade.
     Deve ser chamado dentro do app_context do Flask.
     """
-    # Import tardio para evitar ciclo: db.models → services.crypto → db.models
-    from db.models import db as _db
-
     key = _get_key()
     if key is None:
         print("ERRO: PATIENT_DATA_KEY não configurada. Migração abortada.")
@@ -106,21 +99,11 @@ def migrar_dados_existentes():
         )).fetchall()
 
     count = 0
-    for row in rows:
-        eid, name, record = row
-        needs_update = False
-        new_name = name
-        new_record = record
+    for eid, name, record in rows:
+        new_name = _recifrar(name, _AD_EVAL_NAME, eid)
+        new_record = _recifrar(record, _AD_EVAL_RECORD, eid)
 
-        if name is not None and not name.startswith(_ENCRYPT_PREFIX):
-            new_name = encrypt(name, _AD_EVAL_NAME)
-            needs_update = True
-
-        if record is not None and not record.startswith(_ENCRYPT_PREFIX):
-            new_record = encrypt(record, _AD_EVAL_RECORD)
-            needs_update = True
-
-        if needs_update:
+        if (new_name, new_record) != (name, record):
             _db.session.execute(
                 text(
                     "UPDATE evaluations SET patient_name = :name, patient_record = :rec WHERE id = :id"
